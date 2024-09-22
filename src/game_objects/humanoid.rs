@@ -25,3 +25,7 @@ pub struct Position(pub IVec3);
 
 #[derive(Debug, Default, Deserialize, Event, Serialize)]
 pub struct MoveDirection(pub IVec3);
+
+#[derive(Component, Serialize, Deserialize)]
+pub struct RemoveEntity;
+

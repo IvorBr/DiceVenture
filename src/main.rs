@@ -1,71 +1,76 @@
 use bevy::prelude::*;
 
-use std::{
-    error::Error,
-    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    time::SystemTime,
-};
-
 pub mod game_objects;
-use game_objects::humanoid::{Health, Position, MoveDirection};
-use game_objects::player::{Player, PlayerBundle};
-use game_objects::enemy::{Enemy, EnemyBundle};
-use game_objects::grid::{Tile, Map};
 
-use bevy_replicon::prelude::*;
-use bevy_replicon_renet::{
-    renet::{
-        transport::{
-            ClientAuthentication, NetcodeClientTransport, NetcodeServerTransport,
-            ServerAuthentication, ServerConfig,
-        },
-        ConnectionConfig, RenetClient, RenetServer,
-    },
-    RenetChannelsExt, RepliconRenetPlugins,
-};
+pub mod preludes;
+use crate::preludes::humanoid_preludes::*;
+use crate::preludes::network_preludes::*;
 
-use clap::Parser;
+pub mod plugins;
+use plugins::network_plugin::NetworkPlugin;
 
 #[derive(Component)]
 struct MyCameraMarker;
 
-const PORT: u16 = 5000;
-const PROTOCOL_ID: u64 = 0;
-
-#[derive(Parser, PartialEq, Resource)]
-enum Cli {
-    SinglePlayer,
-    Server {
-        #[arg(short, long, default_value_t = PORT)]
-        port: u16,
-    },
-    Client {
-        #[arg(short, long, default_value_t = Ipv4Addr::LOCALHOST.into())]
-        ip: IpAddr,
-
-        #[arg(short, long, default_value_t = PORT)]
-        port: u16,
-    },
-}
-
-impl Default for Cli {
-    fn default() -> Self {
-        Self::parse()
-    }
-}
-
 fn main() {
     App::new()
-        .init_resource::<Cli>()
-        .add_plugins((DefaultPlugins, RepliconPlugins, RepliconRenetPlugins))
-        .replicate::<Player>()
-        .replicate::<Position>()
-        .add_client_event::<MoveDirection>(ChannelKind::Ordered)
-        .insert_resource(Map::new())
-        .add_systems(Startup, (read_cli.map(Result::unwrap), setup))
-        .add_systems(PreUpdate, (init_player.after(ClientSet::Receive), update_position))
-        .add_systems(Update, (handle_connections.run_if(server_running), read_input, apply_movement))
+        .add_plugins((DefaultPlugins, NetworkPlugin))
+        .add_systems(Startup, (server_setup.run_if(resource_exists::<RenetServer>), setup))
+        .add_systems(PreUpdate,
+            (
+                death_check.run_if(server_running).before(remove_entities),
+                (init_player, init_enemy, remove_entities).after(ClientSet::Receive),
+                update_map
+                    .after(ServerSet::Receive)
+                    .run_if(client_connected),
+                update_position)
+            )
+        .add_systems(Update, (read_input, apply_movement))
         .run();
+}
+
+fn server_setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut map: ResMut<Map>,
+    mut map_update_events: EventWriter<ToClients<MapUpdate>>){
+    for x in -5..5 {
+        for z in -5..5 {
+            let ref_id = commands.spawn(PbrBundle {
+                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                material: materials.add(Color::srgb_u8(100, 255, 100)),
+                transform: Transform::from_xyz(x as f32, 0.0, z as f32),
+                ..Default::default()
+            }).id().index();
+            
+            map.add_entity(x, 0, z, Tile::Terrain);
+
+            map_update_events.send(ToClients {
+                mode: SendMode::Broadcast,
+                event: MapUpdate(IVec3::new(x,0,z), ref_id, Tile::Terrain),
+            });
+        }
+    }
+    let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(4, 1, 4))).id();
+    map.add_entity(4, 1, 4, Tile::Enemy(enemy_id));
+}
+
+fn update_map(mut map_events: EventReader<MapUpdate>,
+    mut map: ResMut<Map>,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands) {
+    for event in map_events.read() {
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+            material: materials.add(Color::srgb_u8(100, 255, 100)),
+            transform: Transform::from_xyz(event.0.x as f32, 0.0, event.0.z as f32),
+            ..Default::default()
+        });
+        
+        map.add_entity_ivec3(event.0, event.2);
+    }
 }
 
 fn init_player(
@@ -85,122 +90,47 @@ fn init_player(
     }
 }
 
-fn read_cli(
+fn init_enemy(
     mut commands: Commands,
-    cli: Res<Cli>,
-    channels: Res<RepliconChannels>,
-) -> Result<(), Box<dyn Error>> {
-    match *cli {
-        Cli::SinglePlayer => {
-            commands.spawn(PlayerBundle::new(
-                ClientId::SERVER,
-                5,
-                IVec3::new(0,1,0)
-            ));
-        }
-        Cli::Server { port } => {
-            let server_channels_config = channels.get_server_configs();
-            let client_channels_config = channels.get_client_configs();
-
-            let server = RenetServer::new(ConnectionConfig {
-                server_channels_config,
-                client_channels_config,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Transform>)>,
+) {
+    for (entity, position) in &enemies {
+        commands.entity(entity).insert(
+            PbrBundle {
+                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                material: materials.add(Color::srgb_u8(255, 100, 100)),
+                transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
                 ..Default::default()
-            });
-
-            let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port))?;
-            let server_config = ServerConfig {
-                current_time,
-                max_clients: 10,
-                protocol_id: PROTOCOL_ID,
-                authentication: ServerAuthentication::Unsecure,
-                public_addresses: Default::default(),
-            };
-            let transport = NetcodeServerTransport::new(server_config, socket)?;
-
-            commands.insert_resource(server);
-            commands.insert_resource(transport);
-
-            commands.spawn(TextBundle::from_section(
-                "Server",
-                TextStyle {
-                    font_size: 30.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ));
-
-            commands.spawn(PlayerBundle::new(
-                ClientId::SERVER,
-                5,
-                IVec3::new(0,1,0)
-                ));
-        }
-        Cli::Client { port, ip } => {
-            let server_channels_config = channels.get_server_configs();
-            let client_channels_config = channels.get_client_configs();
-
-            let client = RenetClient::new(ConnectionConfig {
-                server_channels_config,
-                client_channels_config,
-                ..Default::default()
-            });
-
-            let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-            let client_id = current_time.as_millis() as u64;
-            let server_addr = SocketAddr::new(ip, port);
-            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
-            let authentication = ClientAuthentication::Unsecure {
-                client_id,
-                protocol_id: PROTOCOL_ID,
-                server_addr,
-                user_data: None,
-            };
-            let transport = NetcodeClientTransport::new(current_time, authentication, socket)?;
-
-            commands.insert_resource(client);
-            commands.insert_resource(transport);
-
-            commands.spawn(TextBundle::from_section(
-                format!("Client: {client_id:?}"),
-                TextStyle {
-                    font_size: 30.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ));
-        }
+        });
     }
-
-    Ok(())
 }
 
-// Logs server events and spawns a new player whenever a client connects.
-fn handle_connections(mut commands: Commands, 
-    mut server_events: EventReader<ServerEvent>) {
-    for event in server_events.read() {
-        match event {
-            ServerEvent::ClientConnected { client_id } => {
-                info!("{client_id:?} connected");
-
-                commands.spawn(PlayerBundle::new(
-                    *client_id,
-                    5,
-                    IVec3::new(-1,1,0)
-                ));
-            }
-            ServerEvent::ClientDisconnected { client_id, reason } => {
-                info!("{client_id:?} disconnected: {reason}");
-            }
+fn death_check(
+    mut commands: Commands,
+    entities: Query<(&Health, Entity), Or<(With<Player>, With<Enemy>)>>
+) {
+    for (health, entity) in &entities {
+        if health.get() == 0 {
+            println!("{}, {}", entity, health.get());
+            commands.entity(entity).insert(RemoveEntity);
         }
     }
 }
 
-fn setup(mut commands: Commands,
-        mut meshes: ResMut<Assets<Mesh>>, 
-        mut materials: ResMut<Assets<StandardMaterial>>,
-        mut map: ResMut<Map>) {
+fn remove_entities(mut commands: Commands,
+    entities: Query<(Entity, &Position), With<RemoveEntity>>,
+    mut map: ResMut<Map>
+) {
+    for (entity, position) in &entities {
+        map.remove_entity(position.0);
+        println!("Despawning entity: {:?}", entity);
+        commands.entity(entity).despawn();
+    }
+}
+
+fn setup(mut commands: Commands) {
     commands.spawn((
         MyCameraMarker,
         Camera3dBundle {
@@ -222,46 +152,12 @@ fn setup(mut commands: Commands,
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
         ..default()
     });
-    
-    for x in 1..4 {
-        commands.spawn(PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb_u8(100, 255, 100)),
-            transform: Transform::from_xyz(x as f32, x as f32, 0.0),
-            ..Default::default()
-        });
-        map.add_entity(x, x, 0, Tile::Terrain);
-    }
-    
-    for x in -5..5 {
-        for z in -5..5 {
-            commands.spawn(PbrBundle {
-                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                material: materials.add(Color::srgb_u8(100, 255, 100)),
-                transform: Transform::from_xyz(x as f32, 0.0, z as f32),
-                ..Default::default()
-            });
-
-            map.add_entity(x, 0, z, Tile::Terrain)
-        }
-    }
-
-    let entity_id = commands.spawn((
-        EnemyBundle::new(5, IVec3::new(-3, 1, -2)),
-        PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb_u8(255, 100, 100)),
-            transform: Transform::from_xyz(-3.0, 1.0, -2.0),
-            ..default()
-        },
-    )).id();
-
-    map.add_entity(-3, 1, -2, Tile::Enemy(entity_id));
 }
 
 fn read_input(mut move_events: EventWriter<MoveDirection>, 
             input: Res<ButtonInput<KeyCode>>) {
     let mut direction = IVec3::ZERO;
+
     if input.just_pressed(KeyCode::KeyW) {
         direction.z -= 1;
     }
@@ -326,7 +222,7 @@ fn apply_movement(
                 }
                 
                 map.remove_entity(current_pos);
-                map.add_entity_IVec3(new_position, Tile::Player(player_entity));
+                map.add_entity_ivec3(new_position, Tile::Player(player_entity));
 
                 position.0 = new_position;
             }

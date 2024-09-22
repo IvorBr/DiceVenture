@@ -1,9 +1,11 @@
 
 use bevy::prelude::*;
 use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, Copy, Clone)]
 pub enum Tile {
+    #[default]
     Terrain,
     Player(Entity),
     Enemy(Entity),
@@ -11,7 +13,7 @@ pub enum Tile {
 
 #[derive(Resource)]
 pub struct Map {
-    grid: HashMap<IVec3, Tile>,
+    pub grid: HashMap<IVec3, Tile>,
 }
 
 impl Map {
@@ -28,7 +30,7 @@ impl Map {
         self.grid.insert(IVec3::new(x, y, z), tile_type);
     }
 
-    pub fn add_entity_IVec3(&mut self, position : IVec3, tile_type : Tile) {
+    pub fn add_entity_ivec3(&mut self, position : IVec3, tile_type : Tile) {
         self.grid.insert(position, tile_type);
     }
 
@@ -36,3 +38,7 @@ impl Map {
         self.grid.remove(&position);
     }
 }
+
+#[derive(Debug, Default, Deserialize, Event, Serialize)]
+pub struct MapUpdate(pub IVec3, pub u32, pub Tile);
+
