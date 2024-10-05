@@ -22,6 +22,18 @@ impl Map {
         Map { grid }
     }
 
+    pub fn can_move(&self, position : IVec3) -> bool {
+        if self.grid.get(&(position - IVec3::new(0,1,0))) == Some(&Tile::Terrain) {
+            match self.grid.get(&position) {
+                None => return true,
+                Some(Tile::Player(_)) => return true,
+                Some(_) => return false,
+            }
+        }
+
+        return false;
+    }
+
     pub fn cell(&self, position : IVec3) -> Option<Tile> {
         self.grid.get(&position).cloned()
     }

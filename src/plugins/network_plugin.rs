@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use crate::server_setup;
 
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
@@ -18,7 +17,7 @@ impl Plugin for NetworkPlugin {
         .replicate::<Position>()
         .replicate::<Enemy>()
         .replicate::<RemoveEntity>()
-        .add_systems(Startup, read_cli.map(Result::unwrap).before(server_setup))
+        .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
         .add_systems(Update, handle_connections.run_if(server_running));
     }
 }
@@ -112,6 +111,34 @@ fn read_cli(
     }
 
     Ok(())
+}
+
+fn server_setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut map: ResMut<Map>,
+    mut map_update_events: EventWriter<ToClients<MapUpdate>>
+) {
+    for x in -5..5 {
+        for z in -5..5 {
+            let ref_id = commands.spawn(PbrBundle {
+                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                material: materials.add(Color::srgb_u8(100, 255, 100)),
+                transform: Transform::from_xyz(x as f32, 0.0, z as f32),
+                ..Default::default()
+            }).id().index();
+            
+            map.add_entity(x, 0, z, Tile::Terrain);
+
+            map_update_events.send(ToClients {
+                mode: SendMode::Broadcast,
+                event: MapUpdate(IVec3::new(x,0,z), ref_id, Tile::Terrain),
+            });
+        }
+    }
+    let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(4, 1, 4))).id();
+    map.add_entity(4, 1, 4, Tile::Enemy(enemy_id));
 }
 
 // Logs server events and spawns a new player whenever a client connects.
