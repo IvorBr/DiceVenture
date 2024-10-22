@@ -1,4 +1,6 @@
 pub use bevy_replicon::prelude::*;
+pub use std::collections::HashSet;
+
 pub use bevy_replicon_renet::{
     renet::{
         transport::{
@@ -16,4 +18,4 @@ pub use std::{
     time::SystemTime,
 };
 
-pub use crate::game_objects::grid::{Tile, Map, MapUpdate};
+pub use crate::game_objects::grid::{TileType, Tile, Map, UpdateType, MapUpdate};

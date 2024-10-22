@@ -4,6 +4,8 @@ use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 pub struct NetworkPlugin;
 
+use crate::constants::CHUNK_SIZE;
+
 use clap::Parser;
 
 impl Plugin for NetworkPlugin {
@@ -18,7 +20,71 @@ impl Plugin for NetworkPlugin {
         .replicate::<Enemy>()
         .replicate::<RemoveEntity>()
         .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
-        .add_systems(Update, handle_connections.run_if(server_running));
+        .add_systems(Update, (load_chunks.run_if(server_running), handle_connections.run_if(server_running)));
+    }
+}
+
+fn load_chunks(
+    mut commands: Commands,
+    mut map: ResMut<Map>,
+    mut map_update_events: EventWriter<ToClients<MapUpdate>>,
+    players: Query<&Position, With<Player>>
+) {
+    //mark chunks for potential unloading, if a player is close then abort
+    let mut chunks_unload : Vec<IVec3> = vec![];
+    
+    for chunk_pos in map.chunks.keys() {
+        let mut unload : bool = true;
+        
+        for player_pos in players.iter() {
+            let player_chunk_pos = map.world_to_chunk_coords(player_pos.0);
+
+            if (player_chunk_pos - *chunk_pos).length_squared() <= 2 {
+                unload = false;
+                break;
+            }
+        }
+
+        if unload {
+            chunks_unload.push(*chunk_pos);
+        }
+    }
+
+    for chunk in chunks_unload {
+        map_update_events.send(ToClients {
+            mode: SendMode::Broadcast,
+            event: MapUpdate(UpdateType::UnloadTerrain, chunk, 0),
+        });
+    }
+
+    for position in players.iter() {
+        let chunk_pos = map.world_to_chunk_coords(position.0);
+        let load_radius = 1;
+
+        for chunk_x in -load_radius..=load_radius {
+            for chunk_z in -load_radius..=load_radius {
+                let neighbor_chunk_pos = chunk_pos + IVec3::new(chunk_x, 0, chunk_z);
+                if !map.chunks.get(&neighbor_chunk_pos).is_some() {
+                    let base_x = neighbor_chunk_pos.x * CHUNK_SIZE;
+                    let base_z = neighbor_chunk_pos.z * CHUNK_SIZE;
+                    
+                    let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(base_x + 4, 1, base_z + 4))).id();
+                    map.add_entity(base_x + 4, 1, base_z + 4, Tile::new(TileType::Enemy, enemy_id));
+
+                    for x in 0..16 {
+                        for z in 0..16 {
+                            let pos_x = x + base_x;
+                            let pos_z = z + base_z;
+                            
+                            map_update_events.send(ToClients {
+                                mode: SendMode::Broadcast,
+                                event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(pos_x,0,pos_z), 0),
+                            });
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -32,7 +98,7 @@ fn read_cli(
             commands.spawn(PlayerBundle::new(
                 ClientId::SERVER,
                 5,
-                IVec3::new(0,1,0)
+                IVec3::new(7,1,7)
             ));
         }
         Cli::Server { port } => {
@@ -71,7 +137,7 @@ fn read_cli(
             commands.spawn(PlayerBundle::new(
                 ClientId::SERVER,
                 5,
-                IVec3::new(0,1,0)
+                IVec3::new(7,1,7)
             ));
         }
         Cli::Client { port, ip } => {
@@ -114,31 +180,8 @@ fn read_cli(
 }
 
 fn server_setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut map: ResMut<Map>,
-    mut map_update_events: EventWriter<ToClients<MapUpdate>>
 ) {
-    for x in -5..5 {
-        for z in -5..5 {
-            let ref_id = commands.spawn(PbrBundle {
-                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                material: materials.add(Color::srgb_u8(100, 255, 100)),
-                transform: Transform::from_xyz(x as f32, 0.0, z as f32),
-                ..Default::default()
-            }).id().index();
-            
-            map.add_entity(x, 0, z, Tile::Terrain);
-
-            map_update_events.send(ToClients {
-                mode: SendMode::Broadcast,
-                event: MapUpdate(IVec3::new(x,0,z), ref_id, Tile::Terrain),
-            });
-        }
-    }
-    let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(4, 1, 4))).id();
-    map.add_entity(4, 1, 4, Tile::Enemy(enemy_id));
+    println!("Server setup");
 }
 
 // Logs server events and spawns a new player whenever a client connects.
@@ -156,15 +199,27 @@ fn handle_connections(mut commands: Commands,
                 commands.spawn(PlayerBundle::new(
                     *client_id,
                     5,
-                    IVec3::new(-1,1,0)
+                    IVec3::new(6,1,5)
                 ));
 
-                for (key, value) in map.grid.iter() {
-                    if *value == Tile::Terrain {
-                        map_update_events.send(ToClients {
-                            mode: SendMode::Direct(*client_id),
-                            event: MapUpdate(*key, 0, *value), //TODO:: NEEDS AN ACTUAL REF ID
-                        });
+                for (chunk_pos, chunk) in map.chunks.iter() {
+                    for i in 0..chunk.tiles.len() {
+                        let x = (i % 16) as i32;
+                        let y = ((i / 16) % 16) as i32;
+                        let z = (i / (16 * 16)) as i32;
+                
+                        let world_x = chunk_pos.x * 16 + x;
+                        let world_y = chunk_pos.y * 16 + y;
+                        let world_z = chunk_pos.z * 16 + z;
+                        let tile = chunk.tiles[i];
+
+                        if tile.kind == TileType::Terrain {
+                            map_update_events.send(ToClients {
+                                mode: SendMode::Direct(*client_id),
+                                event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(world_x, world_y, world_z), 0), // Include actual ref_id if needed
+                            });
+                        }
+                        
                     }
                 }
             }

@@ -10,12 +10,36 @@ use crate::preludes::network_preludes::*;
 pub mod plugins;
 use plugins::network_plugin::NetworkPlugin;
 
+mod constants;
+
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
+
+#[derive(Eq, PartialEq)]
+struct Node {
+    pos: IVec3,
+    f_score: i32,
+}
+
+// Implementing Ord for BinaryHeap (it is a max-heap by default)
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.f_score.cmp(&self.f_score) // Reverse order to make it a min-heap
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Component)]
-struct MyCameraMarker;
+struct CameraMarker;
 
 #[derive(Component)]
 struct MoveTimer(Timer);
-
+ 
 fn main() {
     App::new()
     .add_plugins((DefaultPlugins, NetworkPlugin))
@@ -25,32 +49,78 @@ fn main() {
             death_check.run_if(server_running).before(remove_entities),
             (init_player, init_enemy, remove_entities).after(ClientSet::Receive),
             update_map
-                .after(ServerSet::Receive)
-                .run_if(client_connected),
+                .after(ClientSet::Receive),
             update_position,
         )
     )
-    .add_systems(Update, (read_input, apply_movement, move_enemies))
+    .add_systems(Update, (read_input, apply_movement, move_enemies, update_camera))
     .run();
 }
 
-fn update_map(mut map_events: EventReader<MapUpdate>,
-    mut map: ResMut<Map>,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands
+fn update_camera(
+    mut camera_query: Query<&mut Transform, With<CameraMarker>>, 
+    players: Query<(&Player, &Transform), (With<Player>, Without<CameraMarker>)>,          
+    client: Res<RepliconClient>,                                  
 ) {
-    for event in map_events.read() {
-        commands.spawn(PbrBundle {
-            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-            material: materials.add(Color::srgb_u8(100, 255, 100)),
-            transform: Transform::from_xyz(event.0.x as f32, 0.0, event.0.z as f32),
-            ..Default::default()
-        });
-        
-        map.add_entity_ivec3(event.0, event.2);
+    let client_id = client.id();
+
+    for (player, player_transform) in players.iter() {
+        if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
+            if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+                camera_transform.translation = Vec3::new(
+                    player_transform.translation.x,
+                    player_transform.translation.y + 10.0,  
+                    player_transform.translation.z + 10.0,
+                );
+
+                camera_transform.look_at(
+                    player_transform.translation, 
+                    Vec3::Y
+                );
+            }
+        }
     }
 }
+
+    fn update_map(mut map_events: EventReader<MapUpdate>,
+        mut map: ResMut<Map>,
+        mut meshes: ResMut<Assets<Mesh>>, 
+        mut materials: ResMut<Assets<StandardMaterial>>,
+        mut commands: Commands
+    ) {
+        for event in map_events.read() {
+            match event.0 {
+                UpdateType::LoadTerrain => {
+                    let terrain_id = commands.spawn(PbrBundle {
+                        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                        material: materials.add(Color::srgb_u8(100, 255, 100)),
+                        transform: Transform::from_xyz(event.1.x as f32, 0.0, event.1.z as f32),
+                        ..Default::default()
+                    }).id();
+                    
+                    //event.3 has the tile type, currently hard coded...
+                    map.add_entity_ivec3(event.1, Tile::new(TileType::Terrain, terrain_id));
+                }
+                UpdateType::UnloadTerrain => {
+                    if let Some(chunk) = map.chunks.get(&event.1) {
+                        let mut entities_to_despawn = Vec::new();
+        
+                        for tile in &chunk.tiles {
+                            if commands.get_entity(tile.entity).is_some() {
+                                entities_to_despawn.push(tile.entity);
+                            }
+                        }
+                    
+                        for entity in entities_to_despawn {
+                            commands.entity(entity).despawn();
+                        }
+                        
+                        map.chunks.remove(&event.1);
+                    }
+                }
+            }   
+        }
+    }
 
 fn init_player(
     mut commands: Commands,
@@ -83,7 +153,7 @@ fn init_enemy(
                 transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
                 ..Default::default()
             },
-            MoveTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
+            MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)))
         );
     }
 }
@@ -114,7 +184,7 @@ fn remove_entities(mut commands: Commands,
 fn setup(mut commands: Commands
 ) {
     commands.spawn((
-        MyCameraMarker,
+        CameraMarker,
         Camera3dBundle {
             projection: PerspectiveProjection {
                 fov: 60.0_f32.to_radians(),
@@ -172,28 +242,34 @@ fn apply_movement(
                 new_position.x += current_pos.x;
                 new_position.y += current_pos.y;
                 new_position.z += current_pos.z;
-
-                match map.cell(new_position) {
-                    Some(Tile::Enemy(enemy_entity)) => {
-                        if let Ok(mut health) = enemies.get_mut(enemy_entity) {
+                
+                match map.get_tile(new_position).kind {
+                    TileType::Enemy => {
+                        let tile = map.get_tile(new_position);
+                        if let Ok(mut health) = enemies.get_mut(tile.entity) {
                             println!("Enemy encountered with health: {}", health.get());
                             health.damage(10);
                             println!("Enemy health after damage: {}", health.get());
                         }
                         return;
                     }
-                    Some(Tile::Terrain) => {
+                    TileType::Terrain => {
                         new_position.y += 1;
-                        if map.cell(new_position) != None || map.cell(new_position) != None {
+                        let tile_above = map.get_tile(new_position);
+
+                        if tile_above.kind != TileType::Empty {
                             return;
                         }
                     }
-                    None => {
+                    TileType::Empty => {
                         let mut temp_pos = new_position;
                         temp_pos.y -= 1;
-                        if map.cell(temp_pos) == None {
+                        let tile_below = map.get_tile(temp_pos);
+
+                        if tile_below.kind == TileType::Empty {
                             temp_pos.y -= 1;
-                            if map.cell(temp_pos) != Some(Tile::Terrain){
+                            let tile_below_terrain = map.get_tile(temp_pos);
+                            if tile_below_terrain.kind != TileType::Terrain {
                                 return;
                             }
                             new_position.y -= 1;
@@ -204,8 +280,9 @@ fn apply_movement(
                     }
                 }
                 
+                // Update the map after the logic
                 map.remove_entity(current_pos);
-                map.add_entity_ivec3(new_position, Tile::Player(player_entity));
+                map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
 
                 position.0 = new_position;
             }
@@ -244,15 +321,9 @@ fn move_enemies(
             if let Some(target_pos) = closest_player {
                 let path = astar(enemy_pos.0, target_pos, &map);
                 
-                println!("new path from: {:?} to {:?}", enemy_pos.0, closest_player);
-
-                for step in path.iter() {
-                    println!("{:?}", step);
-                }
-
                 if let Some(next_step) = path.get(1) {
                     map.remove_entity(enemy_pos.0);
-                    map.add_entity_ivec3(*next_step, Tile::Enemy(enemy_entity));
+                    map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
 
                     enemy_pos.0 = *next_step;
                     transform.translation = Vec3::new(next_step.x as f32, next_step.y as f32, next_step.z as f32);
@@ -262,41 +333,19 @@ fn move_enemies(
     }
 }
 
-use std::collections::{BinaryHeap, HashSet};
-use std::cmp::Ordering;
-
-#[derive(Eq, PartialEq)]
-struct Node {
-    pos: IVec3,
-    f_score: i32,
-}
-
-// Implementing Ord for BinaryHeap (it is a max-heap by default)
-impl Ord for Node {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.f_score.cmp(&self.f_score) // Reverse order to make it a min-heap
-    }
-}
-
-impl PartialOrd for Node {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 fn astar(start: IVec3, goal: IVec3, map: &Map) -> Vec<IVec3> {
     let mut open_set = BinaryHeap::new();
+    let mut open_set_hash = HashSet::new(); // Store the positions in the open set for faster checks
     let mut closed_set = HashSet::new();
     let mut came_from = HashMap::new();
-    let mut g_score = HashMap::new();
-    let mut f_score = HashMap::new();
+    
+    // Combine g_score and f_score into a single HashMap of tuples (g, f)
+    let mut scores = HashMap::new();
 
-    open_set.push(Node {
-        pos: start,
-        f_score: heuristic(start, goal),
-    });
-    g_score.insert(start, 0);
-    f_score.insert(start, heuristic(start, goal));
+    let start_heuristic = heuristic(start, goal);
+    open_set.push(Node { pos: start, f_score: start_heuristic });
+    open_set_hash.insert(start);
+    scores.insert(start, (0, start_heuristic));
 
     while let Some(current_node) = open_set.pop() {
         let current = current_node.pos;
@@ -305,33 +354,40 @@ fn astar(start: IVec3, goal: IVec3, map: &Map) -> Vec<IVec3> {
             return reconstruct_path(came_from, current);
         }
 
+        open_set_hash.remove(&current);
         closed_set.insert(current);
+
+        let (current_g_score, _) = scores[&current];
 
         for neighbor in get_valid_neighbors(current, map) {
             if closed_set.contains(&neighbor) {
                 continue;
             }
 
-            let tentative_g_score = g_score[&current] + 1;
+            let tentative_g_score = current_g_score + 1;
 
-            if tentative_g_score < *g_score.get(&neighbor).unwrap_or(&i32::MAX) {
+            // Fetch the neighbor's g_score if it exists, otherwise assume a large value
+            let (neighbor_g_score, _) = scores.get(&neighbor).unwrap_or(&(i32::MAX, i32::MAX));
+
+            if tentative_g_score < *neighbor_g_score {
                 came_from.insert(neighbor, current);
-                g_score.insert(neighbor, tentative_g_score);
-                f_score.insert(neighbor, tentative_g_score + heuristic(neighbor, goal));
+                let neighbor_f_score = tentative_g_score + heuristic(neighbor, goal);
+                scores.insert(neighbor, (tentative_g_score, neighbor_f_score));
 
-                if !open_set.iter().any(|node| node.pos == neighbor) {
+                // Only push to open set if it's not already there
+                if !open_set_hash.contains(&neighbor) {
                     open_set.push(Node {
                         pos: neighbor,
-                        f_score: f_score[&neighbor],
+                        f_score: neighbor_f_score,
                     });
+                    open_set_hash.insert(neighbor);
                 }
             }
         }
     }
 
-    Vec::new() // Return an empty path if no valid path is found
+    Vec::new()
 }
-
 
 // Heuristic function for A*
 fn heuristic(a: IVec3, b: IVec3) -> i32 {
@@ -340,16 +396,16 @@ fn heuristic(a: IVec3, b: IVec3) -> i32 {
 
 // Reconstruct the path
 fn reconstruct_path(came_from: HashMap<IVec3, IVec3>, mut current: IVec3) -> Vec<IVec3> {
-    let mut total_path = vec![];
+    let mut total_path = vec![]; // Include the goal node
     while let Some(&prev) = came_from.get(&current) {
         current = prev;
         total_path.push(current);
     }
-    total_path.reverse();
+    total_path.reverse(); // Path needs to be reversed because we build it backward
     total_path
 }
 
-fn get_valid_neighbors(position: IVec3, map:&Map) -> Vec<IVec3> {
+fn get_valid_neighbors(position: IVec3, map: &Map) -> Vec<IVec3> {
     let mut neighbors = Vec::new();
 
     let directions = [
@@ -359,8 +415,8 @@ fn get_valid_neighbors(position: IVec3, map:&Map) -> Vec<IVec3> {
         IVec3::new(0, 0, -1),
     ];
 
-    for dir in directions.iter() {
-        let neighbor_pos = position + *dir;
+    for &dir in directions.iter() {
+        let neighbor_pos = position + dir;
         if map.can_move(neighbor_pos) {
             neighbors.push(neighbor_pos);
         }
@@ -368,3 +424,4 @@ fn get_valid_neighbors(position: IVec3, map:&Map) -> Vec<IVec3> {
 
     neighbors
 }
+
