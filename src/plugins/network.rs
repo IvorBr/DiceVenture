@@ -30,7 +30,7 @@ fn load_chunks(
     mut map_update_events: EventWriter<ToClients<MapUpdate>>,
     players: Query<&Position, With<Player>>
 ) {
-    //mark chunks for potential unloading, if a player is close then abort
+    // Mark chunks for potential unloading, if a player is close then abort
     let mut chunks_unload : Vec<IVec3> = vec![];
     
     for chunk_pos in map.chunks.keys() {

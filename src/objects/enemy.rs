@@ -1,7 +1,8 @@
 use bevy::prelude::*;
-use crate::game_objects::humanoid::{Health, Position};
+use crate::objects::humanoid::{Health, Position};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
+use std::cmp::Ordering;
 
 #[derive(Bundle)]
 pub struct EnemyBundle {
@@ -24,3 +25,24 @@ impl EnemyBundle {
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct Enemy;
+
+#[derive(Component)]
+pub struct MoveTimer(pub Timer);
+
+#[derive(Eq, PartialEq)]
+pub struct Node {
+    pub pos: IVec3,
+    pub f_score: i32,
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.f_score.cmp(&self.f_score)
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}

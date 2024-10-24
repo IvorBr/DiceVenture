@@ -36,7 +36,7 @@ impl Tile {
 
 impl Default for Tile {
     fn default() -> Self {
-        Tile::new(TileType::Empty, Entity::PLACEHOLDER) // assuming 0 is a default value for Entity
+        Tile::new(TileType::Empty, Entity::PLACEHOLDER)
     }
 }
 
@@ -78,7 +78,6 @@ impl Map {
         Map { chunks }
     }
 
-    // Convert world position to chunk coordinates
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
         IVec3::new(
             world_pos.x.div_euclid(CHUNK_SIZE),
@@ -152,32 +151,6 @@ impl Map {
         if let Some(chunk) = self.get_chunk_mut(position) {
             chunk.reset_tile(local_coords);
         }
-    }
-
-    pub fn load_chunks_around(&mut self, player_pos: IVec3, load_radius: i32) {
-        let chunk_pos = self.world_to_chunk_coords(player_pos);
-
-        for x in -load_radius..=load_radius {
-            for z in -load_radius..=load_radius {
-                let neighbor_chunk_pos = chunk_pos + IVec3::new(x, 0, z);
-
-                if !self.chunks.get(&neighbor_chunk_pos).is_some() {
-                    let chunk = self.get_or_create_chunk(neighbor_chunk_pos * CHUNK_SIZE);
-                
-                    let start_index = (CHUNK_SIZE * CHUNK_SIZE * 0) as usize;
-                    let end_index = start_index + (CHUNK_SIZE * CHUNK_SIZE) as usize;
-                    chunk.tiles[start_index..end_index].fill(Tile::default());
-                }
-            }
-        }
-    }
-
-    pub fn unload_chunks_far_from(&mut self, player_pos: IVec3, unload_radius: i32) {
-        let chunk_pos = self.world_to_chunk_coords(player_pos);
-
-        self.chunks.retain(|&pos, _| {
-            (chunk_pos - pos).abs().x <= unload_radius && (chunk_pos - pos).abs().z <= unload_radius
-        });
     }
 }
 

@@ -18,4 +18,4 @@ pub use std::{
     time::SystemTime,
 };
 
-pub use crate::game_objects::grid::{TileType, Tile, Map, UpdateType, MapUpdate};
+pub use crate::objects::grid::{TileType, Tile, Map, UpdateType, MapUpdate};
