@@ -10,6 +10,7 @@ bevy = { version = "0.14.1", features = ["dynamic_linking"] }
 bevy_replicon = "=0.27.0"
 bevy_replicon_renet = "0.4.0"
 clap = { version = "4.1", features = ["derive"] }
+dolly = "0.6.0"
 log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
 serde = "1.0.209"
 

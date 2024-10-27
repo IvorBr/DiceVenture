@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
+use crate::objects::player::LocalPlayer;
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(PreUpdate, update_position)
         .add_systems(Update, (init_player, read_input, apply_movement));
     }
 }
@@ -16,9 +16,12 @@ fn init_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    players: Query<(Entity, &Position), (With<Player>, Without<Transform>)>,
+    players: Query<(Entity, &Position, &Player), (With<Player>, Without<Transform>)>,
+    client: Res<RepliconClient>,
 ) {
-    for (entity, position) in &players {
+    let client_id = client.id();
+
+    for (entity, position, player) in &players {
         commands.entity(entity).insert(
             PbrBundle {
                 mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
@@ -26,6 +29,10 @@ fn init_player(
                 transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
                 ..Default::default()
         });
+
+        if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
+            commands.entity(entity).insert(LocalPlayer);
+        }
     }
 }
 
@@ -53,15 +60,15 @@ fn read_input(mut move_events: EventWriter<MoveDirection>,
 
 fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut players: Query<(&Player, &mut Position, &Transform, Entity)>,
+    mut players: Query<(&Player, &mut Position, Entity), With<Player>>,
     mut enemies: Query<&mut Health, With<Enemy>>,
     mut map: ResMut<Map>
 ) {
     for FromClient { client_id, event } in move_events.read() {
-        for (player, mut position, transform, player_entity) in &mut players {
+        for (player, mut position, player_entity) in &mut players {
             if *client_id == player.0 {
                 let mut new_position = event.0;
-                let current_pos = IVec3::new(transform.translation.x as i32, transform.translation.y as i32, transform.translation.z as i32);
+                let current_pos = position.0.clone();
                 new_position.x += current_pos.x;
                 new_position.y += current_pos.y;
                 new_position.z += current_pos.z;
@@ -110,14 +117,5 @@ fn apply_movement(
                 position.0 = new_position;
             }
         }
-    }
-}
-
-fn update_position(mut moved_players: Query<(&Position, &mut Transform), Changed<Position>>,
-){
-    for (position, mut transform) in &mut moved_players {
-        transform.translation.x = position.0.x as f32;
-        transform.translation.y = position.0.y as f32;
-        transform.translation.z = position.0.z as f32;
     }
 }

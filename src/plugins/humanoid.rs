@@ -11,6 +11,7 @@ impl Plugin for HumanoidPlugin {
             (
                 death_check.run_if(server_running).before(remove_entities),
                 (remove_entities).after(ClientSet::Receive),
+                move_entities
             )
         );
     }
@@ -36,5 +37,18 @@ fn remove_entities(mut commands: Commands,
         map.remove_entity(position.0);
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn();
+    }
+}
+
+fn move_entities(
+    mut moved_entities: Query<(&Position, &mut Transform)>, 
+    time: Res<Time>
+){
+    for (position, mut transform) in &mut moved_entities {
+        if position.0.as_vec3() != transform.translation {
+            transform.translation = transform
+                .translation
+                .lerp(position.0.as_vec3(), time.delta_seconds() * 10.0);
+        }
     }
 }

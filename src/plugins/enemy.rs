@@ -36,11 +36,11 @@ fn init_enemy(
 
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(&mut MoveTimer, &mut Transform, &mut Position, Entity), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(&mut MoveTimer, &mut Position, Entity), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
     mut map: ResMut<Map>
 ) {
-    for (mut timer, mut transform, mut enemy_pos, enemy_entity) in enemies.iter_mut() {
+    for (mut timer, mut enemy_pos, enemy_entity) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
             let mut closest_player: Option<IVec3> = None;
             let mut closest_distance: i32 = i32::MAX;
@@ -61,7 +61,6 @@ fn move_enemies(
                     map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
 
                     enemy_pos.0 = *next_step;
-                    transform.translation = Vec3::new(next_step.x as f32, next_step.y as f32, next_step.z as f32);
                 }
             }
         }

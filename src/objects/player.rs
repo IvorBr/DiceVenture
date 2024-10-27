@@ -24,3 +24,6 @@ impl PlayerBundle {
 
 #[derive(Component, Serialize, Deserialize, Debug)]
 pub struct Player(pub ClientId);
+
+#[derive(Component)]
+pub struct LocalPlayer;

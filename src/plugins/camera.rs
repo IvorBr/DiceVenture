@@ -1,31 +1,51 @@
+use dolly::prelude::*;
 use bevy::prelude::*;
-
-use crate::preludes::humanoid_preludes::*;
-use crate::preludes::network_preludes::*;
+use crate::objects::player::LocalPlayer;
 
 #[derive(Component)]
-struct CameraMarker;
+struct PlayerCamera;
+
+#[derive(Component)]
+pub struct DollyCamera {
+    pub rig: CameraRig,
+}
+
+impl DollyCamera {
+    pub fn new(pos: Vec3, rotation: Quat) -> Self {
+        let mut yaw = YawPitch::new();
+        yaw.set_rotation_quat(rotation);
+
+        Self {
+            rig: CameraRig::builder()
+                .with(Position::new(pos))
+                .with(yaw)
+                .with(Smooth::new_position_rotation(1.0, 1.0))
+                .build(),
+        }
+    }
+}
 
 pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Startup, camera_setup)
-        .add_systems(Update, camera_update);
+        .add_systems(Update, (follow_player, update));
     }
 }
 
-fn camera_setup(mut commands: Commands
+fn camera_setup(
+    mut commands: Commands
 ) {
+    let transform = Transform::from_xyz(0.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
+    let pos = transform.translation;
+    let rotation = transform.rotation;
+
     commands.spawn((
-        CameraMarker,
+        PlayerCamera,
+        DollyCamera::new(pos, rotation),
         Camera3dBundle {
-            projection: PerspectiveProjection {
-                fov: 60.0_f32.to_radians(),
-                ..default()
-            }.into(),
-            transform: Transform::from_xyz(0.0, 10.0, 10.0)
-                .looking_at(Vec3::ZERO, Vec3::Y),
+            transform,
             ..default()
         },
     ));
@@ -39,28 +59,30 @@ fn camera_setup(mut commands: Commands
         ..default()
     });
 }
-
-fn camera_update(
-    mut camera_query: Query<&mut Transform, With<CameraMarker>>, 
-    players: Query<(&Player, &Transform), (With<Player>, Without<CameraMarker>)>,          
-    client: Res<RepliconClient>,                                  
+   
+fn follow_player(
+    mut camera: Query<&mut DollyCamera, With<PlayerCamera>>, 
+    player: Query<&Transform, (With<LocalPlayer>, Without<PlayerCamera>)>,          
 ) {
-    let client_id = client.id();
+    if let Ok(player_transform) = player.get_single() {
+        if let Ok(mut dolly_cam) = camera.get_single_mut() {
+            let offset = Vec3::new(0.0, 10.0, 10.0);
 
-    for (player, player_transform) in players.iter() {
-        if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
-            if let Ok(mut camera_transform) = camera_query.get_single_mut() {
-                camera_transform.translation = Vec3::new(
-                    player_transform.translation.x,
-                    player_transform.translation.y + 10.0,  
-                    player_transform.translation.z + 10.0,
-                );
-
-                camera_transform.look_at(
-                    player_transform.translation, 
-                    Vec3::Y
-                );
-            }
+            let target_position = player_transform.translation + offset;
+            let pos_driver = dolly_cam.rig.driver_mut::<Position>();
+            pos_driver.position = target_position.into();
+            let yaw_pitch = dolly_cam.rig.driver_mut::<YawPitch>();
+            yaw_pitch.pitch_degrees = -45.0;
+            let (_, yaw, _) = player_transform.rotation.to_euler(EulerRot::YXZ);
+            yaw_pitch.yaw_degrees = yaw.to_degrees();
         }
+    }
+}
+
+pub fn update(mut query: Query<(&mut Transform, &mut DollyCamera)>, time: Res<Time>) {
+    for (mut transform, mut dolly_cam) in query.iter_mut() {
+        dolly_cam.rig.update(time.delta_seconds());
+        transform.translation = dolly_cam.rig.final_transform.position.into();
+        transform.rotation = dolly_cam.rig.final_transform.rotation.into();
     }
 }

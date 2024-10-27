@@ -2,12 +2,11 @@ use bevy::prelude::*;
 
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-pub struct NetworkPlugin;
-
 use crate::constants::CHUNK_SIZE;
 
 use clap::Parser;
 
+pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((RepliconPlugins, RepliconRenetPlugins))
@@ -20,7 +19,10 @@ impl Plugin for NetworkPlugin {
         .replicate::<Enemy>()
         .replicate::<RemoveEntity>()
         .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
-        .add_systems(Update, (load_chunks.run_if(server_running), handle_connections.run_if(server_running)));
+        .add_systems(Update, (
+            load_chunks.run_if(server_running), 
+            handle_connections.run_if(server_running)
+        ));
     }
 }
 

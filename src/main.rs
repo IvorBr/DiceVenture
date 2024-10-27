@@ -11,7 +11,7 @@ use plugins::enemy::EnemyPlugin;
 use plugins::player::PlayerPlugin;
 use plugins::camera::CameraPlugin;
 use plugins::humanoid::HumanoidPlugin;
- 
+
 fn main() {
     App::new()
     .add_plugins((
@@ -50,7 +50,7 @@ fn update_map(mut map_events: EventReader<MapUpdate>,
                     let mut entities_to_despawn = Vec::new();
     
                     for tile in &chunk.tiles {
-                        if commands.get_entity(tile.entity).is_some() {
+                        if commands.get_entity(tile.entity).is_some() && tile.kind == TileType::Terrain { //BIG PROBLEM CURRENTLY WITH ENEMY REPLICATION!!!
                             entities_to_despawn.push(tile.entity);
                         }
                     }
