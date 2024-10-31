@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::objects::player::LocalPlayer;
+use crate::plugins::camera::{DollyCamera, PlayerCamera};
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
@@ -37,7 +38,8 @@ fn init_player(
 }
 
 fn read_input(mut move_events: EventWriter<MoveDirection>, 
-    input: Res<ButtonInput<KeyCode>>
+    input: Res<ButtonInput<KeyCode>>,
+    camera: Query<&DollyCamera,  With<PlayerCamera>>
 ) {
     let mut direction = IVec3::ZERO;
 
@@ -53,6 +55,17 @@ fn read_input(mut move_events: EventWriter<MoveDirection>,
     if input.just_pressed(KeyCode::KeyA) {
         direction.x -= 1;
     }
+
+    if let Ok(camera) = camera.get_single() {
+        direction = match camera.direction {
+            0 => direction,                    
+            1 => IVec3::new(direction.z, 0, -direction.x),
+            2 => IVec3::new(-direction.x, 0, -direction.z),
+            3 => IVec3::new(-direction.z, 0, direction.x),
+            _ => direction,
+        };
+    }
+
     if direction != IVec3::ZERO {
         move_events.send(MoveDirection(direction));
     }
