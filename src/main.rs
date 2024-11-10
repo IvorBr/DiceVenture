@@ -1,27 +1,11 @@
 use bevy::prelude::*;
 
-mod objects;
-mod preludes;
-mod plugins;
-mod constants;
-
-use crate::preludes::network_preludes::*;
-use plugins::network::NetworkPlugin;
-use plugins::enemy::EnemyPlugin;
-use plugins::player::PlayerPlugin;
-use plugins::camera::CameraPlugin;
-use plugins::humanoid::HumanoidPlugin;
+use dice_venture::AppPlugin;
+use dice_venture::preludes::network_preludes::*;
 
 fn main() {
     App::new()
-    .add_plugins((
-        DefaultPlugins, 
-        NetworkPlugin, 
-        PlayerPlugin,
-        CameraPlugin,
-        EnemyPlugin,
-        HumanoidPlugin
-    ))
+    .add_plugins(AppPlugin)
     .add_systems(PreUpdate, update_map.after(ClientSet::Receive))
     .run();
 }
