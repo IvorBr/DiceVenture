@@ -70,8 +70,8 @@ fn load_chunks(
                     let base_x = neighbor_chunk_pos.x * CHUNK_SIZE;
                     let base_z = neighbor_chunk_pos.z * CHUNK_SIZE;
                     
-                    let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(base_x + 4, 1, base_z + 4))).id();
-                    map.add_entity(base_x + 4, 1, base_z + 4, Tile::new(TileType::Enemy, enemy_id));
+                    // let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(base_x + 4, 1, base_z + 4))).id();
+                    // map.add_entity(base_x + 4, 1, base_z + 4, Tile::new(TileType::Enemy, enemy_id));
 
                     for x in 0..16 {
                         for z in 0..16 {

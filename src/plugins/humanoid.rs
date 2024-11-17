@@ -36,7 +36,7 @@ fn remove_entities(mut commands: Commands,
     for (entity, position) in &entities {
         map.remove_entity(position.0);
         println!("Despawning entity: {:?}", entity);
-        commands.entity(entity).despawn();
+        commands.entity(entity).despawn_recursive();
     }
 }
 

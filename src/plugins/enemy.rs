@@ -75,7 +75,7 @@ fn move_enemies(
 
             if let Some(target_pos) = closest_player {
                 let mut closest_offset = enemy_pos.0;
-                let mut min_distance = i32::MAX;
+                let mut min_distance = closest_offset.distance_squared(target_pos);
 
                 for offset in &shape.0 {
                     let offset_pos = enemy_pos.0 + *offset;
@@ -91,9 +91,17 @@ fn move_enemies(
                 
                 if let Some(next_step) = path.get(1) {
                     map.remove_entity(enemy_pos.0);
-                    map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
+                    for offset in &shape.0 {
+                        let current_tile_pos = enemy_pos.0 + *offset;
+                        map.remove_entity(current_tile_pos);
+                    }
 
                     enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
+                    map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
+                    for offset in &shape.0 {
+                        let new_tile_pos = enemy_pos.0 + *offset;
+                        map.add_entity_ivec3(new_tile_pos, Tile::new_multi(TileType::Enemy, enemy_entity));
+                    }
                 }
             }
         }
