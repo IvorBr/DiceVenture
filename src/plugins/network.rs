@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::constants::CHUNK_SIZE;
+use crate::CHUNK_SIZE;
 
 use clap::Parser;
 

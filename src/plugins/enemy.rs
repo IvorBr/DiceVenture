@@ -11,7 +11,7 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(PreUpdate, init_enemy)
-        .add_systems(Update, move_enemies);
+        .add_systems(Update, move_enemies.run_if(server_running)); //Not sure if this is what was moving the enemies on the client
     }
 }
 
@@ -19,28 +19,48 @@ fn init_enemy(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Transform>)>,
+    enemies: Query<(Entity, &Position, &Shape), (With<Enemy>, Without<Transform>)>,
 ) {
-    for (entity, position) in &enemies {
+    for (entity, position, shape) in &enemies {
         commands.entity(entity).insert((
             PbrBundle {
                 mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                material: materials.add(Color::srgb_u8(255, 100, 100)),
+                material: materials.add(Color::srgb_u8(200, 50, 50)),
                 transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
                 ..Default::default()
             },
             MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)))
         );
+
+        // Spawn visual parts for each offset
+        for offset in &shape.0 {
+            let part_position = *offset;
+            let child = commands.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                    material: materials.add(Color::srgb_u8(200, 50, 50)),
+                    transform: Transform::from_xyz(
+                        part_position.x as f32,
+                        part_position.y as f32,
+                        part_position.z as f32,
+                    ),
+                    ..Default::default()
+                },
+                EnemyPart
+            )).id();
+
+            commands.entity(entity).add_child(child);
+        }
     }
 }
 
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(&mut MoveTimer, &mut Position, Entity), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(&mut MoveTimer, &mut Position, Entity, &Shape), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
     mut map: ResMut<Map>
 ) {
-    for (mut timer, mut enemy_pos, enemy_entity) in enemies.iter_mut() {
+    for (mut timer, mut enemy_pos, enemy_entity, shape) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
             let mut closest_player: Option<IVec3> = None;
             let mut closest_distance: i32 = i32::MAX;
@@ -54,13 +74,26 @@ fn move_enemies(
             }
 
             if let Some(target_pos) = closest_player {
-                let path = astar(enemy_pos.0, target_pos, &map);
+                let mut closest_offset = enemy_pos.0;
+                let mut min_distance = i32::MAX;
+
+                for offset in &shape.0 {
+                    let offset_pos = enemy_pos.0 + *offset;
+                    let distance = offset_pos.distance_squared(target_pos);
+
+                    if distance < min_distance {
+                        min_distance = distance;
+                        closest_offset = offset_pos;
+                    }
+                }
+
+                let path = astar(closest_offset, target_pos, &map);
                 
                 if let Some(next_step) = path.get(1) {
                     map.remove_entity(enemy_pos.0);
                     map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
 
-                    enemy_pos.0 = *next_step;
+                    enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
                 }
             }
         }

@@ -3,7 +3,8 @@ use bevy::prelude::*;
 pub mod objects;
 pub mod preludes;
 pub mod plugins;
-pub mod constants;
+
+pub const CHUNK_SIZE : i32 = 16;
 
 use plugins::network::NetworkPlugin;
 use plugins::enemy::EnemyPlugin;

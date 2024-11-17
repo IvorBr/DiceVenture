@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Default)]
 pub struct Health{
     value : u128,
 }
@@ -20,7 +20,7 @@ impl Health {
     }
 }
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Default)]
 pub struct Position(pub IVec3);
 
 #[derive(Debug, Default, Deserialize, Event, Serialize)]

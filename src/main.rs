@@ -2,12 +2,43 @@ use bevy::prelude::*;
 
 use dice_venture::AppPlugin;
 use dice_venture::preludes::network_preludes::*;
+use dice_venture::preludes::humanoid_preludes::*;
 
 fn main() {
     App::new()
     .add_plugins(AppPlugin)
     .add_systems(PreUpdate, update_map.after(ClientSet::Receive))
+    .add_systems(Update, test_function)
     .run();
+}
+
+fn test_function(
+    mut commands: Commands,
+    mut map: ResMut<Map>,
+    input: Res<ButtonInput<KeyCode>>,
+){
+    if input.just_pressed(KeyCode::KeyT) {
+        println!("Spawned multi");
+        //test multi_tile enemy
+        let enemy_shape = Shape::new_2x2x2();
+        let offsets = enemy_shape.0.clone();
+        let enemy_pos = IVec3::new(1, 1, 0);
+
+        let enemy_id = commands.spawn(EnemyBundle {
+            shape: enemy_shape,
+            health: Health::new(100),
+            position: Position(enemy_pos),
+            replicated: Replicated,
+            enemy: Enemy
+        }).id();
+
+        map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+        
+        for pos in offsets {
+            let offset_pos = pos + enemy_pos;
+            map.add_entity_ivec3(offset_pos, Tile::new_multi(TileType::Enemy, enemy_id));
+        }
+    }
 }
 
 fn update_map(mut map_events: EventReader<MapUpdate>,
@@ -34,7 +65,7 @@ fn update_map(mut map_events: EventReader<MapUpdate>,
                     let mut entities_to_despawn = Vec::new();
     
                     for tile in &chunk.tiles {
-                        if commands.get_entity(tile.entity).is_some() && tile.kind == TileType::Terrain { //BIG PROBLEM CURRENTLY WITH ENEMY REPLICATION!!!
+                        if commands.get_entity(tile.entity).is_some() && tile.kind == TileType::Terrain { //BIG PROBLEM CURRENTLY WITH ENEMY REPLICATION!!! check trello
                             entities_to_despawn.push(tile.entity);
                         }
                     }

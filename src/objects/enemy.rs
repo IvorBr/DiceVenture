@@ -4,12 +4,13 @@ use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct EnemyBundle {
-    enemy: Enemy,
-    position: Position,
-    health: Health,
-    replicated: Replicated,
+    pub enemy: Enemy,
+    pub position: Position,
+    pub health: Health,
+    pub shape: Shape,
+    pub replicated: Replicated,
 }
 
 impl EnemyBundle {
@@ -18,16 +19,47 @@ impl EnemyBundle {
             position: Position(pos_vec),
             enemy: Enemy,
             health: Health::new(health),
+            shape: Shape::default(),
+            replicated: Replicated,
+        }
+    }
+    fn default() -> Self {
+        Self {
+            enemy: Enemy,                      
+            position: Position(IVec3::ZERO),   
+            health: Health::new(100),          
+            shape: Shape::default(),           
             replicated: Replicated,
         }
     }
 }
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component, Serialize, Deserialize, Default)]
 pub struct Enemy;
 
 #[derive(Component)]
+pub struct EnemyPart;
+
+#[derive(Component)]
 pub struct MoveTimer(pub Timer);
+
+#[derive(Component, Serialize, Deserialize, Clone, Default)]
+pub struct Shape(pub Vec<IVec3>);
+
+impl Shape {
+    pub fn new_2x2x2()-> Self {
+        Shape(vec![
+            IVec3::new(0, 0, 1),
+            IVec3::new(1, 0, 0),
+            IVec3::new(1, 0, 1),
+            
+            IVec3::new(0, 1, 0),
+            IVec3::new(0, 1, 1),
+            IVec3::new(1, 1, 0),
+            IVec3::new(1, 1, 1),
+        ])
+    }
+}
 
 #[derive(Eq, PartialEq)]
 pub struct Node {
