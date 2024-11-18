@@ -36,7 +36,7 @@ fn test_function(
         
         for pos in offsets {
             let offset_pos = pos + enemy_pos;
-            map.add_entity_ivec3(offset_pos, Tile::new_multi(TileType::Enemy, enemy_id));
+            map.add_entity_ivec3(offset_pos, Tile::new(TileType::Enemy, enemy_id));
         }
     }
 }

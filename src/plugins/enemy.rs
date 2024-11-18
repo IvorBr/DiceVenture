@@ -100,7 +100,7 @@ fn move_enemies(
                     map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
                     for offset in &shape.0 {
                         let new_tile_pos = enemy_pos.0 + *offset;
-                        map.add_entity_ivec3(new_tile_pos, Tile::new_multi(TileType::Enemy, enemy_entity));
+                        map.add_entity_ivec3(new_tile_pos, Tile::new(TileType::Enemy, enemy_entity));
                     }
                 }
             }

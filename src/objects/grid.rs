@@ -18,7 +18,6 @@ pub enum TileType {
 pub struct Tile {
     pub kind : TileType,
     pub entity : Entity,
-    pub parent_entity: Option<Entity>,
 }
 
 impl Tile {
@@ -26,22 +25,12 @@ impl Tile {
         Self {
             kind,
             entity,
-            parent_entity: None,
-        }
-    }
-
-    pub fn new_multi(kind: TileType, parent_entity: Entity) -> Self {
-        Self {
-            kind,
-            entity: Entity::PLACEHOLDER,
-            parent_entity: Some(parent_entity),
         }
     }
     
     pub fn reset(&mut self) {
         self.kind = TileType::Empty;
         self.entity = Entity::PLACEHOLDER;
-        self.parent_entity = None;
     }
 }
 
