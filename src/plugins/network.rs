@@ -17,6 +17,7 @@ impl Plugin for NetworkPlugin {
         .replicate::<Player>()
         .replicate::<Position>()
         .replicate::<Enemy>()
+        .replicate::<Shape>()
         .replicate::<RemoveEntity>()
         .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
         .add_systems(Update, (
@@ -27,8 +28,7 @@ impl Plugin for NetworkPlugin {
 }
 
 fn load_chunks(
-    mut commands: Commands,
-    mut map: ResMut<Map>,
+    map: Res<Map>,
     mut map_update_events: EventWriter<ToClients<MapUpdate>>,
     players: Query<&Position, With<Player>>
 ) {
@@ -70,9 +70,6 @@ fn load_chunks(
                     let base_x = neighbor_chunk_pos.x * CHUNK_SIZE;
                     let base_z = neighbor_chunk_pos.z * CHUNK_SIZE;
                     
-                    // let enemy_id = commands.spawn(EnemyBundle::new(5, IVec3::new(base_x + 4, 1, base_z + 4))).id();
-                    // map.add_entity(base_x + 4, 1, base_z + 4, Tile::new(TileType::Enemy, enemy_id));
-
                     for x in 0..16 {
                         for z in 0..16 {
                             let pos_x = x + base_x;

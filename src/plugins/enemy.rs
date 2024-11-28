@@ -4,14 +4,14 @@ use bevy::prelude::*;
 
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::objects::enemy::{Node, MoveTimer};
+use crate::objects::enemy::{Node, MoveTimer, SnakePart};
 
 pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(PreUpdate, init_enemy)
-        .add_systems(Update, move_enemies.run_if(server_running)); //Not sure if this is what was moving the enemies on the client
+        .add_systems(Update, move_enemies.run_if(server_running));
     }
 }
 
@@ -19,9 +19,11 @@ fn init_enemy(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    enemies: Query<(Entity, &Position, &Shape), (With<Enemy>, Without<Transform>)>,
+    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Transform>)>,
+    enemy_shapes: Query<&Shape>,
+    snake_parts: Query<&SnakePart, Without<Transform>>,
 ) {
-    for (entity, position, shape) in &enemies {
+    for (entity, position) in &enemies {
         commands.entity(entity).insert((
             PbrBundle {
                 mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
@@ -32,35 +34,65 @@ fn init_enemy(
             MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)))
         );
 
-        // Spawn visual parts for each offset
-        for offset in &shape.0 {
-            let part_position = *offset;
-            let child = commands.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                    material: materials.add(Color::srgb_u8(200, 50, 50)),
-                    transform: Transform::from_xyz(
-                        part_position.x as f32,
-                        part_position.y as f32,
-                        part_position.z as f32,
-                    ),
-                    ..Default::default()
-                },
-                EnemyPart
-            )).id();
+        if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
+            let mut prev_entity = entity;
+            for i in 1..5 {
+                let offset_pos = position.0 - IVec3::new(i, 0, 0);
+                let next_entity = commands.spawn((
+                    PbrBundle {
+                        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                        material: materials.add(Color::srgb_u8(200, 50, 50)),
+                        transform: Transform::from_xyz(offset_pos.x as f32, offset_pos.y as f32, offset_pos.z as f32),
+                        ..Default::default()
+                    },
+                    Position(offset_pos))
+                ).id();
+                println!("{}",next_entity);
+                commands.entity(prev_entity).insert(
+                    SnakePart {
+                        next: Some(next_entity)
+                    }
+                );
+                prev_entity = next_entity;
+            }
 
-            commands.entity(entity).add_child(child);
+            commands.entity(prev_entity).insert(
+                SnakePart {
+                    next: Some(Entity::PLACEHOLDER)
+                }
+            );
+        }
+
+        // Spawn visual parts for each offset
+        if enemy_shapes.get(entity).is_ok() {
+            for offset in &enemy_shapes.get(entity).unwrap().0 {
+                let part_position = *offset;
+                let child = commands.spawn(
+                    PbrBundle {
+                        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                        material: materials.add(Color::srgb_u8(200, 50, 50)),
+                        transform: Transform::from_xyz(
+                            part_position.x as f32,
+                            part_position.y as f32,
+                            part_position.z as f32,
+                        ),
+                        ..Default::default()
+                    }).id();
+
+                commands.entity(entity).add_child(child);
+            }
         }
     }
 }
 
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(&mut MoveTimer, &mut Position, Entity, &Shape), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
-    mut map: ResMut<Map>
+    mut map: ResMut<Map>,
+    mut snake_parts: Query<(&SnakePart, &mut Position), (Without<Enemy>, Without<Player>)>,
 ) {
-    for (mut timer, mut enemy_pos, enemy_entity, shape) in enemies.iter_mut() {
+    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
             let mut closest_player: Option<IVec3> = None;
             let mut closest_distance: i32 = i32::MAX;
@@ -76,31 +108,63 @@ fn move_enemies(
             if let Some(target_pos) = closest_player {
                 let mut closest_offset = enemy_pos.0;
                 let mut min_distance = closest_offset.distance_squared(target_pos);
-
-                for offset in &shape.0 {
-                    let offset_pos = enemy_pos.0 + *offset;
-                    let distance = offset_pos.distance_squared(target_pos);
-
-                    if distance < min_distance {
-                        min_distance = distance;
-                        closest_offset = offset_pos;
+                
+                if let Some(shape) = shape {
+                    for offset in &shape.0 {
+                        let offset_pos = enemy_pos.0 + *offset;
+                        let distance = offset_pos.distance_squared(target_pos);
+    
+                        if distance < min_distance {
+                            min_distance = distance;
+                            closest_offset = offset_pos;
+                        }
                     }
                 }
-
+                
                 let path = astar(closest_offset, target_pos, &map);
                 
                 if let Some(next_step) = path.get(1) {
                     map.remove_entity(enemy_pos.0);
-                    for offset in &shape.0 {
-                        let current_tile_pos = enemy_pos.0 + *offset;
-                        map.remove_entity(current_tile_pos);
+                    
+                    if let Some(shape) = shape {
+                        for offset in &shape.0 {
+                            let current_tile_pos = enemy_pos.0 + *offset;
+                            map.remove_entity(current_tile_pos);
+                        }
+                    }
+                    
+                    if let Some(head) = snake_part {
+                        if let Some(next_entity) = head.next {
+                            if let Ok(mut current) = snake_parts.get_mut(next_entity) {
+                                let mut old_pos = current.1.0;
+                                map.remove_entity(current.1.0);
+                                current.1.0 = enemy_pos.0;
+                                map.add_entity_ivec3(current.1.0, Tile::new(TileType::Enemy, enemy_entity));
+                    
+                                while let Some(next_entity) = current.0.next {
+                                    if let Ok(mut snake) = snake_parts.get_mut(next_entity) {
+                                        let next_old_pos = snake.1.0;
+                                        map.remove_entity(snake.1.0);
+                                        snake.1.0 = old_pos;
+                                        map.add_entity_ivec3(snake.1.0, Tile::new(TileType::Enemy, enemy_entity));
+                                        old_pos = next_old_pos;
+                                        current = snake;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
                     map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
-                    for offset in &shape.0 {
-                        let new_tile_pos = enemy_pos.0 + *offset;
-                        map.add_entity_ivec3(new_tile_pos, Tile::new(TileType::Enemy, enemy_entity));
+
+                    if let Some(shape) = shape {
+                        for offset in &shape.0 {
+                            let new_tile_pos = enemy_pos.0 + *offset;
+                            map.add_entity_ivec3(new_tile_pos, Tile::new(TileType::Enemy, enemy_entity));
+                        }
                     }
                 }
             }

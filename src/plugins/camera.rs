@@ -79,11 +79,11 @@ pub fn rotate_camera(
     input: Res<ButtonInput<KeyCode>>,
 ) {
     if let Ok(mut camera) = camera_query.get_single_mut() {
-        if input.just_pressed(KeyCode::ArrowRight) {
+        if input.just_pressed(KeyCode::KeyQ) {
             camera.rig.driver_mut::<YawPitch>().rotate_yaw_pitch(90.0, 0.0);
             camera.direction = (camera.direction + 1) % 4;
         }
-        if input.just_pressed(KeyCode::ArrowLeft) {
+        if input.just_pressed(KeyCode::KeyE) {
             camera.rig.driver_mut::<YawPitch>().rotate_yaw_pitch(-90.0, 0.0);
             camera.direction = (camera.direction + 3) % 4;
         }

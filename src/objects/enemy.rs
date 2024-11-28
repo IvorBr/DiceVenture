@@ -9,7 +9,6 @@ pub struct EnemyBundle {
     pub enemy: Enemy,
     pub position: Position,
     pub health: Health,
-    pub shape: Shape,
     pub replicated: Replicated,
 }
 
@@ -19,7 +18,6 @@ impl EnemyBundle {
             position: Position(pos_vec),
             enemy: Enemy,
             health: Health::new(health),
-            shape: Shape::default(),
             replicated: Replicated,
         }
     }
@@ -28,7 +26,6 @@ impl EnemyBundle {
             enemy: Enemy,                      
             position: Position(IVec3::ZERO),   
             health: Health::new(100),          
-            shape: Shape::default(),           
             replicated: Replicated,
         }
     }
@@ -36,9 +33,6 @@ impl EnemyBundle {
 
 #[derive(Component, Serialize, Deserialize, Default)]
 pub struct Enemy;
-
-#[derive(Component)]
-pub struct EnemyPart;
 
 #[derive(Component)]
 pub struct MoveTimer(pub Timer);
@@ -77,4 +71,9 @@ impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
+}
+
+#[derive(Component)]
+pub struct SnakePart {
+    pub next: Option<Entity>
 }
