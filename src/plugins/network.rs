@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
+use crate::objects::enemy::SnakePart;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::CHUNK_SIZE;
 
 use clap::Parser;
-
 pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
@@ -18,6 +18,7 @@ impl Plugin for NetworkPlugin {
         .replicate::<Position>()
         .replicate::<Enemy>()
         .replicate::<Shape>()
+        .replicate::<SnakePart>()
         .replicate::<RemoveEntity>()
         .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
         .add_systems(Update, (
@@ -32,7 +33,6 @@ fn load_chunks(
     mut map_update_events: EventWriter<ToClients<MapUpdate>>,
     players: Query<&Position, With<Player>>
 ) {
-    // Mark chunks for potential unloading, if a player is close then abort
     let mut chunks_unload : Vec<IVec3> = vec![];
     
     for chunk_pos in map.chunks.keys() {
@@ -124,13 +124,12 @@ fn read_cli(
             commands.insert_resource(server);
             commands.insert_resource(transport);
 
-            commands.spawn(TextBundle::from_section(
-                "Server",
-                TextStyle {
+            commands.spawn((Text::new("Server"),
+                TextFont {
                     font_size: 30.0,
-                    color: Color::WHITE,
                     ..default()
                 },
+                TextColor(Color::WHITE)
             ));
 
             commands.spawn(PlayerBundle::new(
@@ -164,13 +163,12 @@ fn read_cli(
             commands.insert_resource(client);
             commands.insert_resource(transport);
 
-            commands.spawn(TextBundle::from_section(
-                format!("Client: {client_id:?}"),
-                TextStyle {
+            commands.spawn((Text::new(format!("Client: {client_id:?}")),
+                TextFont {
                     font_size: 30.0,
-                    color: Color::WHITE,
                     ..default()
                 },
+                TextColor(Color::WHITE)
             ));
         }
     }

@@ -30,7 +30,6 @@ fn death_check(
             
             if let Ok(mut current) = snake_parts.get(entity) {
                 while let Some(next_entity) = current.next {
-                    println!("4 times, {}", next_entity);
                     commands.entity(next_entity).insert(RemoveEntity);
                     current = match snake_parts.get(next_entity) {
                         Ok(snake) => snake,
@@ -61,7 +60,7 @@ fn move_entities(
         if position.0.as_vec3() != transform.translation {
             transform.translation = transform
                 .translation
-                .lerp(position.0.as_vec3(), time.delta_seconds() * 10.0);
+                .lerp(position.0.as_vec3(), time.delta_secs() * 10.0);
         }
     }
 }

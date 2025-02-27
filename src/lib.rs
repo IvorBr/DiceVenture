@@ -4,24 +4,36 @@ pub mod objects;
 pub mod preludes;
 pub mod plugins;
 
-pub const CHUNK_SIZE : i32 = 16;
-
 use plugins::network::NetworkPlugin;
+
+use plugins::camera::CameraPlugin;
+
+use plugins::humanoid::HumanoidPlugin;
 use plugins::enemy::EnemyPlugin;
 use plugins::player::PlayerPlugin;
-use plugins::camera::CameraPlugin;
-use plugins::humanoid::HumanoidPlugin;
+
+use plugins::overworld::OverworldPlugin;
+
+#[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
+enum GameState {
+    Overworld,
+    InGame,
+}
+
+pub const CHUNK_SIZE : i32 = 16;
 
 pub struct AppPlugin;
 impl Plugin for AppPlugin {
   fn build(&self, app: &mut App) {
+        app.add_plugins(DefaultPlugins);
+        app.insert_state(GameState::Overworld);
         app.add_plugins((
-            DefaultPlugins, 
-            NetworkPlugin, 
-            PlayerPlugin,
+            // NetworkPlugin, 
+            // PlayerPlugin,
             CameraPlugin,
-            EnemyPlugin,    
-            HumanoidPlugin
+            // EnemyPlugin,    
+            // HumanoidPlugin,
+            OverworldPlugin
         )); 
     }
 }

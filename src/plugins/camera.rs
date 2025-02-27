@@ -1,9 +1,12 @@
 use dolly::prelude::*;
 use bevy::prelude::*;
-use crate::objects::player::LocalPlayer;
+use mint::{Quaternion, Point3};
 
 #[derive(Component)]
 pub struct PlayerCamera;
+
+#[derive(Component)]
+pub struct CameraTarget;
 
 #[derive(Component)]
 pub struct DollyCamera {
@@ -14,14 +17,22 @@ pub struct DollyCamera {
 impl DollyCamera {
     pub fn new(rotation: Quat) -> Self {
         let mut yaw = YawPitch::new();
-        yaw.set_rotation_quat(rotation);
+
+        yaw.set_rotation_quat(Quaternion {
+            s: rotation.w,
+            v: mint::Vector3 {
+                x: rotation.x,
+                y: rotation.y,
+                z: rotation.z,
+            },
+        });
 
         Self {
             rig: CameraRig::builder()
-                .with(Position::new(Vec3::ZERO))
+                .with(Position::new(Point3 {x: 0.0, y: 0.0, z: 0.0}))
                 .with(yaw)
                 .with(Smooth::new_rotation(1.0))
-                .with(Arm::new(Vec3::Z * 15.0))
+                .with(Arm::new(Point3 {x: 0.0, y: 0.0, z: 15.0}))
                 .build(),
             direction: 0
         }
@@ -33,7 +44,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Startup, camera_setup)
-        .add_systems(Update, (follow_player, rotate_camera, update));
+        .add_systems(Update, (follow_target, rotate_camera, update));
     }
 }
 
@@ -46,30 +57,43 @@ fn camera_setup(
     commands.spawn((
         PlayerCamera,
         DollyCamera::new(rotation),
-        Camera3dBundle {
-            transform,
+        Camera3d {
+            ..default()
+        },
+        transform
+    ));
+
+    commands.spawn((
+        DirectionalLight {
+            color: Color::srgb(1.0, 0.95, 0.9),
+            illuminance: 2500.0,
+            shadows_enabled: true,
+            shadow_depth_bias: DirectionalLight::DEFAULT_SHADOW_DEPTH_BIAS,
+            shadow_normal_bias: DirectionalLight::DEFAULT_SHADOW_NORMAL_BIAS,
+        },
+        Transform {
+            rotation: Quat::from_euler(EulerRot::YXZ, 0.3, -1.0, 0.0),
             ..default()
         },
     ));
 
-    commands.spawn(PointLightBundle {
-        point_light: PointLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
+    // commands.spawn(DistanceFog {
+    //     color: Color::srgb(0.8, 0.85, 1.0),
+    //     directional_light_color: Color::srgba(1.0, 0.98, 0.9, 0.3),
+    //     directional_light_exponent: 10.0,
+    //     falloff: FogFalloff::Exponential { density: 0.01 },
+    // });
+    
 }
-   
-fn follow_player(
+
+fn follow_target(
     mut camera: Query<&mut DollyCamera, With<PlayerCamera>>, 
-    player: Query<&Transform, (With<LocalPlayer>, Without<PlayerCamera>)>,          
+    player: Query<&Transform, (With<CameraTarget>, Without<PlayerCamera>)>,          
 ) {
     if let Ok(player_transform) = player.get_single() {
         if let Ok(mut dolly_cam) = camera.get_single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            pos_driver.position = player_transform.translation.into();
+            pos_driver.position = player_transform.translation.to_array().into();
         }
     }
 }
@@ -95,8 +119,10 @@ pub fn update(
     time: Res<Time>
 ) {
     for (mut transform, mut dolly_cam) in query.iter_mut() {
-        dolly_cam.rig.update(time.delta_seconds());
-        transform.translation = dolly_cam.rig.final_transform.position.into();
-        transform.rotation = dolly_cam.rig.final_transform.rotation.into();
+        dolly_cam.rig.update(time.delta_secs());
+        let dolly_pos = dolly_cam.rig.final_transform.position;
+        let dolly_rot = dolly_cam.rig.final_transform.rotation;
+        transform.translation = Vec3::new(dolly_pos.x, dolly_pos.y, dolly_pos.z);
+        transform.rotation = Quat::from_xyzw(dolly_rot.v.x, dolly_rot.v.y, dolly_rot.v.z, dolly_rot.s);
     }
 }

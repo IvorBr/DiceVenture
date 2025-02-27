@@ -5,6 +5,8 @@ use crate::preludes::network_preludes::*;
 use crate::objects::player::LocalPlayer;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};
 
+use super::camera::CameraTarget;
+
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
@@ -23,16 +25,22 @@ fn init_player(
     let client_id = client.id();
 
     for (entity, position, player) in &players {
-        commands.entity(entity).insert(
-            PbrBundle {
-                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                material: materials.add(Color::srgb_u8(255, 255, 255)),
-                transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
+        commands.entity(entity).insert((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb_u8(255, 255, 255),
                 ..Default::default()
-        });
+            })),
+            Transform::from_xyz(
+                position.0.x as f32,
+                position.0.y as f32,
+                position.0.z as f32
+            ),
+        ));
 
         if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
             commands.entity(entity).insert(LocalPlayer);
+            commands.entity(entity).insert(CameraTarget);
         }
     }
 }

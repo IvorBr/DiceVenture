@@ -13,27 +13,51 @@ pub struct EnemyBundle {
 }
 
 impl EnemyBundle {
-    pub fn new(health: u128, pos_vec: IVec3) -> Self {
+    pub fn new_with_movement(health: u128, pos_vec: IVec3, movement: MovementType) -> Self {
         Self {
             position: Position(pos_vec),
-            enemy: Enemy,
+            enemy: Enemy {
+                movement,
+                ..Enemy::default()
+            },
             health: Health::new(health),
             replicated: Replicated,
         }
     }
+
+    pub fn new(health: u128, pos_vec: IVec3) -> Self {
+        Self::new_with_movement(health, pos_vec, MovementType::Standard)
+    }
+
     fn default() -> Self {
-        Self {
-            enemy: Enemy,                      
-            position: Position(IVec3::ZERO),   
-            health: Health::new(100),          
-            replicated: Replicated,
-        }
+        Self::new(100, IVec3::ZERO)
     }
 }
 
-#[derive(Component, Serialize, Deserialize, Default)]
-pub struct Enemy;
 
+
+#[derive(Serialize, Deserialize, Default)]
+pub enum MovementType {
+    #[default]
+    Standard,
+    Snake,
+    Multi,
+}
+
+#[derive(Component, Serialize, Deserialize)]
+pub struct Enemy {
+    pub movement: MovementType,
+    //pub attacks?
+    //pub aggressionType?
+}
+
+impl Default for Enemy {
+    fn default() -> Self {
+        Enemy {
+            movement: MovementType::default(),
+        }
+    }
+}
 #[derive(Component)]
 pub struct MoveTimer(pub Timer);
 
@@ -73,7 +97,7 @@ impl PartialOrd for Node {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone, Default)]
 pub struct SnakePart {
     pub next: Option<Entity>
 }

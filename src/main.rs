@@ -3,13 +3,13 @@ use bevy::prelude::*;
 use dice_venture::AppPlugin;
 use dice_venture::preludes::network_preludes::*;
 use dice_venture::preludes::humanoid_preludes::*;
-use dice_venture::objects::enemy::SnakePart;
+use dice_venture::objects::enemy::{SnakePart, MovementType};
 
 fn main() {
     App::new()
     .add_plugins(AppPlugin)
-    .add_systems(PreUpdate, update_map.after(ClientSet::Receive))
-    .add_systems(Update, test_function)
+    // .add_systems(PreUpdate, update_map.after(ClientSet::Receive))
+    // .add_systems(Update, test_function)
     .run();
 }
 
@@ -28,7 +28,7 @@ fn test_function(
                 health: Health::new(100),
                 position: Position(enemy_pos),
                 replicated: Replicated,
-                enemy: Enemy
+                enemy: Enemy { movement : MovementType::Multi }
             },
             enemy_shape)).id();
 
@@ -47,7 +47,7 @@ fn test_function(
                 health: Health::new(100),
                 position: Position(enemy_pos),
                 replicated: Replicated,
-                enemy: Enemy
+                enemy: Enemy { movement: MovementType::Snake }
             },
             SnakePart {
                 next: Some(Entity::PLACEHOLDER),
@@ -72,12 +72,14 @@ fn update_map(mut map_events: EventReader<MapUpdate>,
     for event in map_events.read() {
         match event.0 {
             UpdateType::LoadTerrain => {
-                let terrain_id = commands.spawn(PbrBundle {
-                    mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                    material: materials.add(Color::srgb_u8(100, 255, 100)),
-                    transform: Transform::from_xyz(event.1.x as f32, 0.0, event.1.z as f32),
-                    ..Default::default()
-                }).id();
+                let terrain_id = commands.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::srgb_u8(100, 255, 100),
+                        ..Default::default()
+                    })),
+                    Transform::from_xyz(event.1.x as f32, 0.0, event.1.z as f32)
+                )).id();
                 
                 //event.3 has the tile type, currently hard coded...
                 map.add_entity_ivec3(event.1, Tile::new(TileType::Terrain, terrain_id));

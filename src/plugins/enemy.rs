@@ -11,7 +11,7 @@ impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(PreUpdate, init_enemy)
-        .add_systems(Update, move_enemies.run_if(server_running));
+        .add_systems(Update, (move_enemies.run_if(server_running), attack_check));
     }
 }
 
@@ -25,28 +25,34 @@ fn init_enemy(
 ) {
     for (entity, position) in &enemies {
         commands.entity(entity).insert((
-            PbrBundle {
-                mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                material: materials.add(Color::srgb_u8(200, 50, 50)),
-                transform: Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb_u8(200, 50, 50),
                 ..Default::default()
-            },
-            MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)))
-        );
+            })),
+            Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
+            MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
+        ));
 
         if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
             let mut prev_entity = entity;
             for i in 1..5 {
                 let offset_pos = position.0 - IVec3::new(i, 0, 0);
                 let next_entity = commands.spawn((
-                    PbrBundle {
-                        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                        material: materials.add(Color::srgb_u8(200, 50, 50)),
-                        transform: Transform::from_xyz(offset_pos.x as f32, offset_pos.y as f32, offset_pos.z as f32),
+                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::srgb_u8(200, 50, 50),
                         ..Default::default()
-                    },
-                    Position(offset_pos))
-                ).id();
+                    })),
+                    Transform::from_xyz(
+                        offset_pos.x as f32,
+                        offset_pos.y as f32,
+                        offset_pos.z as f32,
+                    ),
+                    Position(offset_pos),
+                )).id();
+
                 println!("{}",next_entity);
                 commands.entity(prev_entity).insert(
                     SnakePart {
@@ -67,17 +73,18 @@ fn init_enemy(
         if enemy_shapes.get(entity).is_ok() {
             for offset in &enemy_shapes.get(entity).unwrap().0 {
                 let part_position = *offset;
-                let child = commands.spawn(
-                    PbrBundle {
-                        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                        material: materials.add(Color::srgb_u8(200, 50, 50)),
-                        transform: Transform::from_xyz(
-                            part_position.x as f32,
-                            part_position.y as f32,
-                            part_position.z as f32,
-                        ),
+                let child = commands.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::srgb_u8(200, 50, 50),
                         ..Default::default()
-                    }).id();
+                    })),
+                    Transform::from_xyz(
+                        part_position.x as f32,
+                        part_position.y as f32,
+                        part_position.z as f32,
+                    )
+                )).id();
 
                 commands.entity(entity).add_child(child);
             }
@@ -133,6 +140,7 @@ fn move_enemies(
                         }
                     }
                     
+                    //snake movement logic
                     if let Some(head) = snake_part {
                         if let Some(next_entity) = head.next {
                             if let Ok(mut current) = snake_parts.get_mut(next_entity) {
@@ -262,4 +270,8 @@ fn get_valid_neighbors(position: IVec3, map: &Map) -> Vec<IVec3> {
     }
 
     neighbors
+}
+
+fn attack_check() {
+    
 }
