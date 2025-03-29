@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 
-use crate::objects::enemy::SnakePart;
+use crate::components::enemy::SnakePart;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::CHUNK_SIZE;
+use crate::IslandSet;
 
 use clap::Parser;
 pub struct NetworkPlugin;
@@ -20,11 +21,13 @@ impl Plugin for NetworkPlugin {
         .replicate::<Shape>()
         .replicate::<SnakePart>()
         .replicate::<RemoveEntity>()
-        .add_systems(Startup, (read_cli.map(Result::unwrap).before(server_setup), server_setup.run_if(resource_exists::<RenetServer>)))
+        .add_systems(Startup,
+            read_cli.map(Result::unwrap)
+        )
         .add_systems(Update, (
-            load_chunks.run_if(server_running), 
+            //load_chunks.run_if(server_running), //might wanna turn on again later?
             handle_connections.run_if(server_running)
-        ));
+        ).in_set(IslandSet));
     }
 }
 
@@ -163,7 +166,8 @@ fn read_cli(
             commands.insert_resource(client);
             commands.insert_resource(transport);
 
-            commands.spawn((Text::new(format!("Client: {client_id:?}")),
+            commands.spawn((
+                Text::new(format!("Client: {client_id:?}")),
                 TextFont {
                     font_size: 30.0,
                     ..default()
@@ -174,11 +178,6 @@ fn read_cli(
     }
 
     Ok(())
-}
-
-fn server_setup(
-) {
-    println!("Server setup");
 }
 
 // Logs server events and spawns a new player whenever a client connects.

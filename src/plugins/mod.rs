@@ -4,3 +4,4 @@ pub mod player;
 pub mod camera;
 pub mod humanoid;
 pub mod overworld;
+pub mod island;

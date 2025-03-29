@@ -2,16 +2,17 @@ use bevy::prelude::*;
 
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
-use crate::objects::player::LocalPlayer;
+use crate::components::player::LocalPlayer;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};
 
 use super::camera::CameraTarget;
+use crate::IslandSet;
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(Update, (init_player, read_input, apply_movement));
+        .add_systems(Update, (init_player, read_input, apply_movement).in_set(IslandSet));
     }
 }
 

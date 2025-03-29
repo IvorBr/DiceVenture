@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
-#[derive(Component, Serialize, Deserialize, Default)]
+#[derive(Component, Serialize, Deserialize)]
 pub struct Health{
     value : u128,
 }
@@ -17,6 +17,12 @@ impl Health {
 
     pub fn damage(&mut self, amount: u128) {
         self.value = self.value.saturating_sub(amount);
+    }
+}
+
+impl Default for Health {
+    fn default() -> Self {
+        Self { value : 100 }
     }
 }
 

@@ -4,14 +4,18 @@ use bevy::prelude::*;
 
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::objects::enemy::{Node, MoveTimer, SnakePart};
+use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
+use crate::IslandSet;
 
 pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(PreUpdate, init_enemy)
-        .add_systems(Update, (move_enemies.run_if(server_running), attack_check));
+        .add_systems(PreUpdate, init_enemy.in_set(IslandSet))
+        .add_systems(Update, (
+            move_enemies.run_if(server_running),
+            attack_check,
+        ).in_set(IslandSet));
     }
 }
 
@@ -24,6 +28,8 @@ fn init_enemy(
     snake_parts: Query<&SnakePart, Without<Transform>>,
 ) {
     for (entity, position) in &enemies {
+        println!("{}", "enemy spawned");
+
         commands.entity(entity).insert((
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             
@@ -190,7 +196,7 @@ fn astar(start: IVec3, goal: IVec3, map: &Map) -> Vec<IVec3> {
     let mut scores = HashMap::new();
 
     let start_heuristic = heuristic(start, goal);
-    open_set.push(Node { pos: start, f_score: start_heuristic });
+    open_set.push(PathfindNode { pos: start, f_score: start_heuristic });
     open_set_hash.insert(start);
     scores.insert(start, (0, start_heuristic));
 
@@ -223,7 +229,7 @@ fn astar(start: IVec3, goal: IVec3, map: &Map) -> Vec<IVec3> {
 
                 // Only push to open set if it's not already there
                 if !open_set_hash.contains(&neighbor) {
-                    open_set.push(Node {
+                    open_set.push(PathfindNode {
                         pos: neighbor,
                         f_score: neighbor_f_score,
                     });

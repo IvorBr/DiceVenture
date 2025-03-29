@@ -3,3 +3,4 @@ pub mod enemy;
 pub mod grid;
 pub mod humanoid;
 pub mod overworld;
+pub mod island;

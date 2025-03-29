@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::objects::humanoid::{Health, Position};
+use crate::components::humanoid::{Health, Position};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
@@ -34,8 +34,6 @@ impl EnemyBundle {
     }
 }
 
-
-
 #[derive(Serialize, Deserialize, Default)]
 pub enum MovementType {
     #[default]
@@ -45,6 +43,9 @@ pub enum MovementType {
 }
 
 #[derive(Component, Serialize, Deserialize)]
+#[require(Position)]
+#[require(Replicated)]
+#[require(Health)]
 pub struct Enemy {
     pub movement: MovementType,
     //pub attacks?
@@ -80,18 +81,18 @@ impl Shape {
 }
 
 #[derive(Eq, PartialEq)]
-pub struct Node {
+pub struct PathfindNode {
     pub pos: IVec3,
     pub f_score: i32,
 }
 
-impl Ord for Node {
+impl Ord for PathfindNode {
     fn cmp(&self, other: &Self) -> Ordering {
         other.f_score.cmp(&self.f_score)
     }
 }
 
-impl PartialOrd for Node {
+impl PartialOrd for PathfindNode {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use dice_venture::AppPlugin;
 use dice_venture::preludes::network_preludes::*;
 use dice_venture::preludes::humanoid_preludes::*;
-use dice_venture::objects::enemy::{SnakePart, MovementType};
+use dice_venture::components::enemy::{SnakePart, MovementType};
 
 fn main() {
     App::new()
@@ -60,47 +60,5 @@ fn test_function(
             let offset_pos = enemy_pos - IVec3::new(i, 0, 0);
             map.add_entity_ivec3(offset_pos, Tile::new(TileType::Enemy, enemy_id));
         }
-    }
-}
-
-fn update_map(mut map_events: EventReader<MapUpdate>,
-    mut map: ResMut<Map>,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands
-) {
-    for event in map_events.read() {
-        match event.0 {
-            UpdateType::LoadTerrain => {
-                let terrain_id = commands.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::srgb_u8(100, 255, 100),
-                        ..Default::default()
-                    })),
-                    Transform::from_xyz(event.1.x as f32, 0.0, event.1.z as f32)
-                )).id();
-                
-                //event.3 has the tile type, currently hard coded...
-                map.add_entity_ivec3(event.1, Tile::new(TileType::Terrain, terrain_id));
-            }
-            UpdateType::UnloadTerrain => {
-                if let Some(chunk) = map.chunks.get(&event.1) {
-                    let mut entities_to_despawn = Vec::new();
-    
-                    for tile in &chunk.tiles {
-                        if commands.get_entity(tile.entity).is_some() && tile.kind == TileType::Terrain { //BIG PROBLEM CURRENTLY WITH ENEMY REPLICATION!!! check trello
-                            entities_to_despawn.push(tile.entity);
-                        }
-                    }
-                
-                    for entity in entities_to_despawn {
-                        commands.entity(entity).despawn();
-                    }
-                    
-                    map.chunks.remove(&event.1);
-                }
-            }
-        }   
     }
 }

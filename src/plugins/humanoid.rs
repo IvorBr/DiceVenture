@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
-use crate::objects::enemy::SnakePart;
+use crate::components::enemy::SnakePart;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
+use crate::IslandSet;
 
 pub struct HumanoidPlugin;
 impl Plugin for HumanoidPlugin {
@@ -13,7 +14,7 @@ impl Plugin for HumanoidPlugin {
                 death_check.run_if(server_running).before(remove_entities),
                 (remove_entities).after(ClientSet::Receive),
                 move_entities
-            )
+            ).in_set(IslandSet)
         );
     }
 }

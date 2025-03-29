@@ -1,34 +1,36 @@
-use bevy::prelude::*;
+use bevy::{math::VectorSpace, prelude::*, state::commands};
 use crate::GameState;
-use crate::objects::overworld::*;
+use crate::components::overworld::*;
 use crate::plugins::camera::CameraTarget;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 
-
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct WaterMaterial {
-    #[uniform(0)]
-    pub base_color: LinearRgba,
-    #[uniform(0)]
-    pub wave_strength: f32,
+    pub random_number: i32,
+    #[texture(1)]
+    #[sampler(2)]
+    pub depth_texture: Handle<Image>,
 }
 
 impl Default for WaterMaterial {
     fn default() -> Self {
         Self {
-            base_color: LinearRgba::rgb(0.0,0.505,0.505),
-            wave_strength: 0.1,
+            random_number: 0,
+            depth_texture: Handle::default()
         }
     }
 }
 
 impl Material for WaterMaterial {
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Blend
+    }
     fn fragment_shader() -> ShaderRef {
-        "shaders\\water_shader.wgsl".into()
+        "shaders/water_shader.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {
-        "shaders\\water_shader.wgsl".into()
+        "shaders/water_shader.wgsl".into()
     }
 }
 
@@ -38,12 +40,56 @@ impl Plugin for OverworldPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((MeshPickingPlugin, MaterialPlugin::<WaterMaterial>::default()))
-        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, spawn_ship))
+        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, spawn_overworld_ui))
+        .add_systems(OnExit(GameState::Overworld), overworld_cleanup)
         .add_systems(
             Update,
-                ship_movement_system.run_if(in_state(GameState::Overworld))
+            (
+                ship_movement_system.run_if(in_state(GameState::Overworld)),
+                island_proximity.run_if(in_state(GameState::Overworld)),
+            )
         );
     }
+}
+
+fn overworld_cleanup(
+    mut commands: Commands,
+    ui_query: Query<Entity, With<OverworldUI>>,
+    overworld_query: Query<Entity, With<OverworldRoot>>,
+
+) {
+    if let Ok(ui_entity) = ui_query.get_single() {
+        commands.entity(ui_entity).despawn_recursive();
+    }
+
+    if let Ok(overworld_entity) = overworld_query.get_single() {
+        commands.entity(overworld_entity).despawn_recursive();
+    }
+}
+
+fn spawn_overworld_ui(
+    mut commands: Commands
+) {
+    commands.spawn(
+        (Node {
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        justify_content: JustifyContent::SpaceBetween,
+        ..default()
+    }, 
+    OverworldUI
+    ))
+    .with_children(|parent| {
+        parent.spawn((
+            Text::new("Enter island - press F"),
+            TextFont {
+                font_size: 25.0,
+                ..default()
+            },
+            ProximityUI,
+            Visibility::Hidden
+        ));
+    });
 }
 
 fn spawn_overworld(
@@ -52,12 +98,20 @@ fn spawn_overworld(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
 ) {
+    let overworld_root = commands
+        .spawn((
+            OverworldRoot,
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            InheritedVisibility::VISIBLE
+        )).id();
+
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(50.0)))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))),
         MeshMaterial3d(water_materials.add(WaterMaterial {
             ..Default::default()
         })),
-        Transform::from_xyz(0.0, -0.5, 0.0),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Ocean
     ))
     .observe(on_clicked_ocean);
 
@@ -70,7 +124,8 @@ fn spawn_overworld(
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
         StarterIsland
-    )).observe(on_clicked_island);
+    )).observe(on_clicked_island)
+    .set_parent(overworld_root);
 
     // few smaller islands around the center.
     let island_positions = [
@@ -89,9 +144,72 @@ fn spawn_overworld(
             })),
             Transform::from_translation(pos),
             Island
-        )).observe(on_clicked_island);
+        )).observe(on_clicked_island)
+        .set_parent(overworld_root);
+    }
+
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.65, 0.45, 0.25),
+            ..Default::default()
+        })),
+        Transform::from_xyz(0.0, 0.0, 0.75),
+        Ship,
+        CameraTarget
+    )).set_parent(overworld_root);
+}
+
+fn island_proximity_check(
+    position: Transform,
+    islands: Vec<(Entity, Transform)> 
+) -> Option<(Entity, f32)> {
+    if islands.is_empty() {
+        return None;
+    }
+
+    let (mut best_island, island_transform) = islands[0];
+    let mut best_distance = position.translation.distance_squared(island_transform.translation);
+
+    for (entity, transform) in islands.iter().skip(1) {
+        let distance = position.translation.distance_squared(transform.translation);
+        if distance < best_distance {
+            best_distance = distance;
+            best_island = *entity;
+        }
+    }
+
+    Some((best_island, best_distance))
+}
+
+fn island_proximity(
+    mut commands: Commands,
+    mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
+    ship_query: Query<&Transform, With<Ship>>,
+    island_query: Query<(Entity, &Transform), With<Island>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut state: ResMut<NextState<GameState>>,
+) {
+    if let Ok(ship_transform) = ship_query.get_single() {
+        let island_transforms: Vec<(Entity, Transform)> = island_query.iter().map(|(e, t)| (e, *t)).collect();
+        
+        if let Some((entity, closest_distance)) = island_proximity_check(*ship_transform, island_transforms) {
+            let mut proximity_ui_visibility = proximity_ui_query.single_mut();
+
+            if closest_distance < 2.0 {
+                *proximity_ui_visibility = Visibility::Inherited;
+
+                if keyboard_input.pressed(KeyCode::KeyF) {
+                    commands.entity(entity).insert(SelectedIsland);
+                    state.set(GameState::Island);
+                }
+            } else {
+                *proximity_ui_visibility = Visibility::Hidden;
+            }
+        }
     }
 }
+
 
 fn on_clicked_island(
     click: Trigger<Pointer<Click>>,
@@ -124,59 +242,13 @@ fn on_clicked_ocean(
     }
 }
 
-fn spawn_ship(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.65, 0.45, 0.25),
-            ..Default::default()
-        })),
-        Transform::from_xyz(0.0, -0.25, 0.75),
-        Ship,
-        CameraTarget
-    ));
-}
-
-fn get_wave_height(position: Vec3, time: f32, wave_strength: f32) -> f32 {
-    (position.x + time).sin() * (position.z + time).sin() * wave_strength
-}
-
-fn get_wave_normal(position: Vec3, time: f32, wave_strength: f32) -> Vec3 {
-    let epsilon = 0.1;
-    
-    let dx = Vec3::new(epsilon, 0.0, 0.0);
-    let dz = Vec3::new(0.0, 0.0, epsilon);
-
-    let height_center = get_wave_height(position, time, wave_strength);
-    let height_x = get_wave_height(position + dx, time, wave_strength);
-    let height_z = get_wave_height(position + dz, time, wave_strength);
-
-    let normal = Vec3::normalize(Vec3::new(
-        height_x - height_center,
-        epsilon,
-        height_z - height_center
-    ));
-
-    normal
-}
-
 fn ship_movement_system(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Ship>>,
-    water_materials: Res<Assets<WaterMaterial>>,
+    mut ship: Query<&mut Transform, (With<Ship>, Without<Ocean>)>,
+    mut ocean: Query<&mut Transform, (Without<Ship>, With<Ocean>)>,
 ) {
-    let wave_strength = water_materials
-        .iter()
-        .next()
-        .map(|(_, mat)| mat.wave_strength)
-        .unwrap_or(0.1);
-
-    for mut transform in &mut query {
+    for mut ship_transform in &mut ship {
         let mut direction = Vec3::ZERO;
 
         if keyboard_input.pressed(KeyCode::KeyW) {
@@ -194,15 +266,12 @@ fn ship_movement_system(
 
         if direction != Vec3::ZERO {
             let speed = 5.0;
-            transform.translation += direction.normalize() * speed * time.delta_secs();
+            ship_transform.translation += direction.normalize() * speed * time.delta_secs();
+            
+            for mut ocean_transform in &mut ocean {
+                ocean_transform.translation.x = ship_transform.translation.x;
+                ocean_transform.translation.z = ship_transform.translation.z;
+            }
         }
-
-        let wave_height = get_wave_height(transform.translation, time.elapsed_secs(), wave_strength);
-        transform.translation.y = wave_height;
-
-        let wave_normal = get_wave_normal(transform.translation, time.elapsed_secs(), wave_strength);
-        let rotation = Quat::from_rotation_arc(Vec3::Y, wave_normal);
-        transform.rotation = rotation * Quat::from_rotation_y(transform.rotation.to_euler(EulerRot::XYZ).0);
-
     }
 }

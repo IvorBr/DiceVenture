@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::objects::humanoid::{Health, Position};
+use crate::components::humanoid::{Health, Position};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::{Replicated, ClientId};
 
