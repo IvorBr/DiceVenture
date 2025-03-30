@@ -9,6 +9,9 @@ pub struct PlayerCamera;
 pub struct CameraTarget;
 
 #[derive(Component)]
+pub struct NewCameraTarget;
+
+#[derive(Component)]
 pub struct DollyCamera {
     pub rig: CameraRig,
     pub direction: u8
@@ -44,6 +47,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Startup, camera_setup)
+        .add_systems(PreUpdate, change_camera_target)
         .add_systems(Update, (follow_target, rotate_camera, update));
     }
 }
@@ -86,14 +90,31 @@ fn camera_setup(
     
 }
 
+fn change_camera_target(
+    mut commands: Commands,
+    new_targets: Query<Entity, Added<NewCameraTarget>>,
+    old_targets: Query<Entity, With<CameraTarget>>,
+) {
+    if let Ok(entity) = new_targets.get_single() {
+        println!("{entity:?}");
+        commands.entity(entity)
+            .remove::<NewCameraTarget>()
+            .insert(CameraTarget);
+
+        for entity in old_targets.iter() {
+            commands.entity(entity).remove::<CameraTarget>();
+        }
+    }
+}
+
 fn follow_target(
     mut camera: Query<&mut DollyCamera, With<PlayerCamera>>, 
-    player: Query<&Transform, (With<CameraTarget>, Without<PlayerCamera>)>,          
+    target_query: Query<&Transform, (With<CameraTarget>, Without<PlayerCamera>)>,          
 ) {
-    if let Ok(player_transform) = player.get_single() {
+    if let Ok(target) = target_query.get_single() {
         if let Ok(mut dolly_cam) = camera.get_single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            pos_driver.position = player_transform.translation.to_array().into();
+            pos_driver.position = target.translation.to_array().into();
         }
     }
 }

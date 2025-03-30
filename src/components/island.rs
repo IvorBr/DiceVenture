@@ -25,3 +25,6 @@ pub struct IslandInfo {
 
 #[derive(Component)]
 pub struct EleminationObjective;
+
+#[derive(Component)]
+pub struct IslandRoot;

@@ -13,8 +13,21 @@ pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Island), setup_island)
-        .add_systems(Update, (update_island, detect_objective.in_set(IslandSet)));
+        .add_systems(OnExit(GameState::Island), island_cleanup)
+        .add_systems(Update, (update_island, (detect_leave, detect_objective).in_set(IslandSet)));
     }
+}
+
+fn island_cleanup(
+    mut map: ResMut<Map>
+) {
+    map.reset();
+
+    //empty map...
+    //clean up entities
+    //remove player and enemies
+
+    //CHANGE NETWORKING TO BE PART OF THEIR RESPECTIVE PLUGINS, THE CURRENT WAY IS JUST SHIT...?
 }
 
 //generate island, for now just a square
@@ -24,6 +37,13 @@ fn setup_island(
     mut commands: Commands,
     mut map: ResMut<Map>,
 ) {
+    let island_root = commands
+        .spawn((
+            IslandRoot,
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            InheritedVisibility::VISIBLE
+        )).id();
+
     for x in 0..16 {
         for z in 0..16 {            
             map_events.send(ToClients {
@@ -33,14 +53,19 @@ fn setup_island(
         }
     }
 
+    //setup leave tile
+    map_events.send(ToClients {
+        mode: SendMode::Broadcast,
+        event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(8, 0, 16), 0),
+    });
+
     let enemy_pos = IVec3::new(5,1,1);
     let enemy_id = commands.spawn((
             Enemy{..Default::default()},
             Position(enemy_pos),
             EleminationObjective
-        )).id();
-
-    println!("{:?}", enemy_id);
+        )).set_parent(overworld_root)
+        .id();
 
     map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
 }
@@ -57,7 +82,9 @@ fn detect_leave(
     player_query: Query<(&Position, Entity), With<Player>>
 ) {
     for (position, player_entity) in player_query.iter() {
-
+        if position.0 == IVec3::new(8, 1, 16) {
+            println!("{:?} leaves island", player_entity);
+        }
     }
 }
 

@@ -95,6 +95,10 @@ impl Map {
         )
     }
 
+    pub fn reset(&mut self) {
+        self.chunks.clear();
+    }
+
     // Get the chunk containing a given world position
     pub fn get_chunk(&self, world_pos: IVec3) -> Option<&Chunk> {
         let chunk_coords = self.world_to_chunk_coords(world_pos);

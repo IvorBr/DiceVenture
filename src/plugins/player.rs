@@ -3,9 +3,7 @@ use bevy::prelude::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::components::player::LocalPlayer;
-use crate::plugins::camera::{DollyCamera, PlayerCamera};
-
-use super::camera::CameraTarget;
+use crate::plugins::camera::{DollyCamera, PlayerCamera, NewCameraTarget};
 use crate::IslandSet;
 
 pub struct PlayerPlugin;
@@ -41,7 +39,7 @@ fn init_player(
 
         if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
             commands.entity(entity).insert(LocalPlayer);
-            commands.entity(entity).insert(CameraTarget);
+            commands.entity(entity).insert(NewCameraTarget);
         }
     }
 }

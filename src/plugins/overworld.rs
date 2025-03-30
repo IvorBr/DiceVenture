@@ -1,7 +1,7 @@
 use bevy::{math::VectorSpace, prelude::*, state::commands};
 use crate::GameState;
 use crate::components::overworld::*;
-use crate::plugins::camera::CameraTarget;
+use crate::plugins::camera::{CameraTarget, NewCameraTarget};
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -63,7 +63,7 @@ fn overworld_cleanup(
     }
 
     if let Ok(overworld_entity) = overworld_query.get_single() {
-        commands.entity(overworld_entity).despawn_recursive();
+        commands.entity(overworld_entity).insert(Visibility::Hidden);
     }
 }
 
@@ -97,7 +97,12 @@ fn spawn_overworld(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
+    overworld_query: Query<&OverworldRoot>
 ) {
+    if let Ok(_) = overworld_query.get_single() {
+        return;
+    }
+
     let overworld_root = commands
         .spawn((
             OverworldRoot,
@@ -156,7 +161,7 @@ fn spawn_overworld(
         })),
         Transform::from_xyz(0.0, 0.0, 0.75),
         Ship,
-        CameraTarget
+        NewCameraTarget
     )).set_parent(overworld_root);
 }
 
