@@ -40,7 +40,7 @@ impl Plugin for OverworldPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((MeshPickingPlugin, MaterialPlugin::<WaterMaterial>::default()))
-        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, spawn_overworld_ui))
+        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, reuse_overworld, spawn_overworld_ui))
         .add_systems(OnExit(GameState::Overworld), overworld_cleanup)
         .add_systems(
             Update,
@@ -55,15 +55,14 @@ impl Plugin for OverworldPlugin {
 fn overworld_cleanup(
     mut commands: Commands,
     ui_query: Query<Entity, With<OverworldUI>>,
-    overworld_query: Query<Entity, With<OverworldRoot>>,
-
+    mut overworld_query: Query<&mut Visibility, With<OverworldRoot>>,
 ) {
     if let Ok(ui_entity) = ui_query.get_single() {
         commands.entity(ui_entity).despawn_recursive();
     }
 
-    if let Ok(overworld_entity) = overworld_query.get_single() {
-        commands.entity(overworld_entity).insert(Visibility::Hidden);
+    if let Ok(mut overworld_visiblity) = overworld_query.get_single_mut() {
+        *overworld_visiblity = Visibility::Hidden;
     }
 }
 
@@ -92,6 +91,20 @@ fn spawn_overworld_ui(
     });
 }
 
+fn reuse_overworld(
+    mut commands: Commands,
+    mut overworld_query: Query<&mut Visibility, With<OverworldRoot>>,
+    ship_query: Query<Entity, With<Ship>>
+) {
+    if let Ok(mut overworld_visiblity) = overworld_query.get_single_mut() {
+        *overworld_visiblity = Visibility::Visible;
+        
+        if let Ok(ship_entity) = ship_query.get_single() {
+            commands.entity(ship_entity).insert(NewCameraTarget);
+        }
+    }
+}
+
 fn spawn_overworld(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -107,7 +120,7 @@ fn spawn_overworld(
         .spawn((
             OverworldRoot,
             Transform::from_xyz(0.0, 0.0, 0.0),
-            InheritedVisibility::VISIBLE
+            Visibility::Visible
         )).id();
 
     commands.spawn((
@@ -128,7 +141,8 @@ fn spawn_overworld(
             ..Default::default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        StarterIsland
+        StarterIsland,
+        Visibility::Inherited
     )).observe(on_clicked_island)
     .set_parent(overworld_root);
 
@@ -148,7 +162,8 @@ fn spawn_overworld(
                 ..Default::default()
             })),
             Transform::from_translation(pos),
-            Island
+            Island,
+            Visibility::Inherited
         )).observe(on_clicked_island)
         .set_parent(overworld_root);
     }
@@ -161,6 +176,7 @@ fn spawn_overworld(
         })),
         Transform::from_xyz(0.0, 0.0, 0.75),
         Ship,
+        Visibility::Inherited,
         NewCameraTarget
     )).set_parent(overworld_root);
 }

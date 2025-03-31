@@ -97,11 +97,6 @@ fn read_cli(
 ) -> Result<(), Box<dyn Error>> {
     match *cli {
         Cli::SinglePlayer => {
-            commands.spawn(PlayerBundle::new(
-                ClientId::SERVER,
-                5,
-                IVec3::new(7,1,7)
-            ));
         }
         Cli::Server { port } => {
             let server_channels_config = channels.get_server_configs();
@@ -133,12 +128,6 @@ fn read_cli(
                     ..default()
                 },
                 TextColor(Color::WHITE)
-            ));
-
-            commands.spawn(PlayerBundle::new(
-                ClientId::SERVER,
-                5,
-                IVec3::new(7,1,7)
             ));
         }
         Cli::Client { port, ip } => {
@@ -192,35 +181,37 @@ fn handle_connections(mut commands: Commands,
             ServerEvent::ClientConnected { client_id } => {
                 info!("{client_id:?} connected");
 
-                commands.spawn(PlayerBundle::new(
-                    *client_id,
-                    5,
-                    IVec3::new(6,1,5)
-                ));
+                // commands.spawn(PlayerBundle::new(
+                //     *client_id,
+                //     5,
+                //     IVec3::new(6,1,5)
+                // ));
 
-                for (chunk_pos, chunk) in map.chunks.iter() {
-                    for i in 0..chunk.tiles.len() {
-                        let x = (i % 16) as i32;
-                        let y = ((i / 16) % 16) as i32;
-                        let z = (i / (16 * 16)) as i32;
+                // for (chunk_pos, chunk) in map.chunks.iter() {
+                //     for i in 0..chunk.tiles.len() {
+                //         let x = (i % 16) as i32;
+                //         let y = ((i / 16) % 16) as i32;
+                //         let z = (i / (16 * 16)) as i32;
                 
-                        let world_x = chunk_pos.x * 16 + x;
-                        let world_y = chunk_pos.y * 16 + y;
-                        let world_z = chunk_pos.z * 16 + z;
-                        let tile = chunk.tiles[i];
+                //         let world_x = chunk_pos.x * 16 + x;
+                //         let world_y = chunk_pos.y * 16 + y;
+                //         let world_z = chunk_pos.z * 16 + z;
+                //         let tile = chunk.tiles[i];
 
-                        if tile.kind == TileType::Terrain {
-                            map_update_events.send(ToClients {
-                                mode: SendMode::Direct(*client_id),
-                                event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(world_x, world_y, world_z), 0), // Include actual ref_id if needed
-                            });
-                        }
+                //         if tile.kind == TileType::Terrain {
+                //             map_update_events.send(ToClients {
+                //                 mode: SendMode::Direct(*client_id),
+                //                 event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(world_x, world_y, world_z), 0), // Include actual ref_id if needed
+                //             });
+                //         }
                         
-                    }
-                }
+                //     }
+                // }
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 info!("{client_id:?} disconnected: {reason}");
+
+                //clean up all player stuff, curently just the player...
                 for (entity, player) in players.iter() {
                     if player.0 == *client_id {
                         commands.entity(entity).insert(RemoveEntity);

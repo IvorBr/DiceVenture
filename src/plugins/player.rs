@@ -10,37 +10,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(Update, (init_player, read_input, apply_movement).in_set(IslandSet));
-    }
-}
-
-fn init_player(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    players: Query<(Entity, &Position, &Player), (With<Player>, Without<Transform>)>,
-    client: Res<RepliconClient>,
-) {
-    let client_id = client.id();
-
-    for (entity, position, player) in &players {
-        commands.entity(entity).insert((
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(255, 255, 255),
-                ..Default::default()
-            })),
-            Transform::from_xyz(
-                position.0.x as f32,
-                position.0.y as f32,
-                position.0.z as f32
-            ),
-        ));
-
-        if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
-            commands.entity(entity).insert(LocalPlayer);
-            commands.entity(entity).insert(NewCameraTarget);
-        }
+        .add_systems(Update, (read_input, apply_movement).in_set(IslandSet));
     }
 }
 

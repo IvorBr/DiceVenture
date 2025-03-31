@@ -23,6 +23,9 @@ impl PlayerBundle {
 }
 
 #[derive(Component, Serialize, Deserialize, Debug)]
+#[require(Position)]
+#[require(Replicated)]
+#[require(Health)]
 pub struct Player(pub ClientId);
 
 #[derive(Component)]
