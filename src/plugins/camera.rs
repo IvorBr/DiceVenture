@@ -109,16 +109,19 @@ fn change_camera_target(
 
 fn follow_target(
     mut camera: Query<&mut DollyCamera, With<PlayerCamera>>, 
-    target_query: Query<&Transform, (With<CameraTarget>, Without<PlayerCamera>)>,          
+    target_query: Query<(Option<&crate::components::humanoid::Position>, &Transform), (With<CameraTarget>, Without<PlayerCamera>)>,          
 ) {
-    if let Ok(target) = target_query.get_single() {
+    if let Ok((maybe_pos, transform)) = target_query.get_single() {
         if let Ok(mut dolly_cam) = camera.get_single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            pos_driver.position = target.translation.to_array().into();
+            let follow_pos = maybe_pos
+                .map(|p| p.0.as_vec3())
+                .unwrap_or(transform.translation);
+
+            pos_driver.position = follow_pos.to_array().into();
         }
     }
 }
-
 pub fn rotate_camera(
     mut camera_query: Query<&mut DollyCamera>,
     input: Res<ButtonInput<KeyCode>>,

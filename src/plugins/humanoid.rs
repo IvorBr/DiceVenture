@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::components::humanoid::ActionState;
 use crate::components::enemy::SnakePart;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
@@ -13,7 +14,7 @@ impl Plugin for HumanoidPlugin {
             (
                 death_check.run_if(server_running).before(remove_entities),
                 (remove_entities).after(ClientSet::Receive),
-                move_entities
+                animate_movement
             ).in_set(IslandSet)
         );
     }
@@ -53,15 +54,24 @@ fn remove_entities(mut commands: Commands,
     }
 }
 
-fn move_entities(
-    mut moved_entities: Query<(&Position, &mut Transform)>, 
+fn animate_movement(
+    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState)>, 
     time: Res<Time>
-){
-    for (position, mut transform) in &mut moved_entities {
-        if position.0.as_vec3() != transform.translation {
-            transform.translation = transform
-                .translation
-                .lerp(position.0.as_vec3(), time.delta_secs() * 10.0);
+) {
+    for (position, mut transform, mut action_state) in &mut moved_entities {
+        if *action_state == ActionState::Attacking {
+            continue;
+        }
+
+        let target = position.0.as_vec3();
+        let current = transform.translation;
+
+        if current.distance(target) > 0.01 {
+            transform.translation = current.lerp(target, time.delta_secs() * 10.0);
+            *action_state = ActionState::Moving;
+        } else {
+            transform.translation = target;
+            *action_state = ActionState::Idle;
         }
     }
 }

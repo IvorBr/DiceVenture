@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
 
+use super::humanoid::Humanoid;
+
 #[derive(Bundle, Default)]
 pub struct EnemyBundle {
     pub enemy: Enemy,
@@ -43,9 +45,8 @@ pub enum MovementType {
 }
 
 #[derive(Component, Serialize, Deserialize)]
-#[require(Position)]
+#[require(Humanoid)]
 #[require(Replicated)]
-#[require(Health)]
 pub struct Enemy {
     pub movement: MovementType,
     //pub attacks?
@@ -101,4 +102,17 @@ impl PartialOrd for PathfindNode {
 #[derive(Component, Serialize, Deserialize, Clone, Default)]
 pub struct SnakePart {
     pub next: Option<Entity>
+}
+
+#[derive(Component)]
+pub enum AttackPhase {
+    Windup,  
+    Strike,
+}
+
+#[derive(Component)]
+pub struct WindUp {
+    pub target_pos: IVec3,
+    pub timer: Timer,
+    pub phase: AttackPhase,
 }

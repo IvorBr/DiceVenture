@@ -2,6 +2,9 @@ use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use bevy::prelude::*;
 
+use crate::components::enemy::AttackPhase;
+use crate::components::enemy::WindUp;
+use crate::components::humanoid::ActionState;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
@@ -15,6 +18,7 @@ impl Plugin for EnemyPlugin {
         .add_systems(Update, (
             move_enemies.run_if(server_running),
             attack_check,
+            windup_and_attack
         ).in_set(IslandSet));
     }
 }
@@ -100,12 +104,12 @@ fn init_enemy(
 
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>, &mut Transform), (With<Enemy>, Without<Player>, Without<WindUp>)>,
     players: Query<&Position, With<Player>>,
     mut map: ResMut<Map>,
     mut snake_parts: Query<(&SnakePart, &mut Position), (Without<Enemy>, Without<Player>)>,
 ) {
-    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape) in enemies.iter_mut() {
+    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape, mut transform) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
             let mut closest_player: Option<IVec3> = None;
             let mut closest_distance: i32 = i32::MAX;
@@ -172,6 +176,11 @@ fn move_enemies(
                     }
 
                     enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
+                    let move_dir = (*next_step - closest_offset).as_vec3();
+                    if move_dir.length_squared() > 0.0 {
+                        let yaw = move_dir.x.atan2(move_dir.z);
+                        transform.rotation = Quat::from_rotation_y(-yaw);
+                    }
                     map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
 
                     if let Some(shape) = shape {
@@ -278,6 +287,98 @@ fn get_valid_neighbors(position: IVec3, map: &Map) -> Vec<IVec3> {
     neighbors
 }
 
-fn attack_check() {
-    
+//check if enemy can attack
+fn attack_check(
+    mut commands: Commands,
+    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Player>, Without<WindUp>)>,
+    players: Query<&Position, With<Player>>,
+) {
+    for (enemy_entity, enemy_pos) in enemies.iter() {
+        for player_pos in players.iter() {
+            let delta = player_pos.0 - enemy_pos.0;
+
+            if delta.abs().x + delta.abs().y + delta.abs().z == 1 {
+                commands.entity(enemy_entity).insert(WindUp {
+                    target_pos: player_pos.0,
+                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                    phase: AttackPhase::Windup,
+                });
+                break;
+            }
+        }
+    }
+}
+
+use std::f32::consts::PI;
+
+fn windup_and_attack(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut enemies: Query<(Entity, &mut WindUp, &Position, &mut Transform, &mut ActionState), With<Enemy>>,
+    players: Query<(Entity, &Position), With<Player>>,
+) {
+    for (entity, mut windup, enemy_pos, mut transform, mut action_state) in enemies.iter_mut() {
+        if *action_state == ActionState::Moving {
+            continue;
+        }
+
+        windup.timer.tick(time.delta());
+
+        let direction = (windup.target_pos - enemy_pos.0).as_vec3().normalize_or_zero();
+        let base_pos = enemy_pos.0.as_vec3();
+        let forward_offset = direction * 0.4;
+
+        // Phase-based tilt angle
+        let angle = match windup.phase {
+            AttackPhase::Windup => {
+                let t = windup.timer.fraction();
+                -30.0_f32.to_radians() * t
+            }
+            AttackPhase::Strike => {
+                let t = windup.timer.fraction();
+                (-30.0 + 50.0 * (PI * t).sin()).to_radians()
+            }
+        };
+
+        // Step 1: Face the direction
+        let yaw = direction.x.atan2(direction.z); // +Z is forward
+        let facing = Quat::from_rotation_y(-yaw); // Rotate around Y to face
+
+        // Step 2: Tilt forward in local space
+        let tilt = Quat::from_rotation_x(angle);
+
+        // Step 3: Combine cleanly
+        transform.rotation = facing * tilt;
+
+        match windup.phase {
+            AttackPhase::Windup => {
+                transform.translation = base_pos;
+
+                if windup.timer.finished() {
+                    windup.phase = AttackPhase::Strike;
+                    windup.timer = Timer::from_seconds(0.25, TimerMode::Once);
+                    *action_state = ActionState::Attacking;
+                }
+            }
+            AttackPhase::Strike => {
+                let t = windup.timer.fraction();
+                let eased = (PI * t).sin();
+                transform.translation = base_pos + forward_offset * eased;
+
+                if windup.timer.finished() {
+                    transform.translation = base_pos;
+                    transform.rotation = facing; // reset to facing direction
+
+                    for (player_entity, player_pos) in players.iter() {
+                        if player_pos.0 == windup.target_pos {
+                            println!("Player hit!");
+                        }
+                    }
+
+                    commands.entity(entity).remove::<WindUp>();
+                    *action_state = ActionState::Idle;
+                }
+            }
+        }
+    }
 }

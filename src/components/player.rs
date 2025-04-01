@@ -3,6 +3,8 @@ use crate::components::humanoid::{Health, Position};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::{Replicated, ClientId};
 
+use crate::components::humanoid::Humanoid;
+
 #[derive(Bundle)]
 pub struct PlayerBundle {
     player: Player,
@@ -23,9 +25,8 @@ impl PlayerBundle {
 }
 
 #[derive(Component, Serialize, Deserialize, Debug)]
-#[require(Position)]
+#[require(Humanoid)]
 #[require(Replicated)]
-#[require(Health)]
 pub struct Player(pub ClientId);
 
 #[derive(Component)]

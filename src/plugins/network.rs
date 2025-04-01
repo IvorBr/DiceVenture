@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
 use crate::components::enemy::SnakePart;
+use crate::components::humanoid::AttackAnimation;
+use crate::components::humanoid::AttackDirection;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::CHUNK_SIZE;
@@ -14,7 +16,9 @@ impl Plugin for NetworkPlugin {
         .init_resource::<Cli>()
         .insert_resource(Map::new())
         .add_client_event::<MoveDirection>(ChannelKind::Ordered)
+        .add_client_event::<AttackDirection>(ChannelKind::Ordered)
         .add_server_event::<MapUpdate>(ChannelKind::Ordered)
+        .add_server_event::<AttackAnimation>(ChannelKind::Ordered)
         .replicate::<Player>()
         .replicate::<Position>()
         .replicate::<Enemy>()
@@ -173,40 +177,11 @@ fn read_cli(
 fn handle_connections(mut commands: Commands, 
     mut server_events: EventReader<ServerEvent>,
     players: Query<(Entity, &Player), With<Player>>,
-    map: ResMut<Map>,
-    mut map_update_events: EventWriter<ToClients<MapUpdate>>
 ) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
                 info!("{client_id:?} connected");
-
-                // commands.spawn(PlayerBundle::new(
-                //     *client_id,
-                //     5,
-                //     IVec3::new(6,1,5)
-                // ));
-
-                // for (chunk_pos, chunk) in map.chunks.iter() {
-                //     for i in 0..chunk.tiles.len() {
-                //         let x = (i % 16) as i32;
-                //         let y = ((i / 16) % 16) as i32;
-                //         let z = (i / (16 * 16)) as i32;
-                
-                //         let world_x = chunk_pos.x * 16 + x;
-                //         let world_y = chunk_pos.y * 16 + y;
-                //         let world_z = chunk_pos.z * 16 + z;
-                //         let tile = chunk.tiles[i];
-
-                //         if tile.kind == TileType::Terrain {
-                //             map_update_events.send(ToClients {
-                //                 mode: SendMode::Direct(*client_id),
-                //                 event: MapUpdate(UpdateType::LoadTerrain, IVec3::new(world_x, world_y, world_z), 0), // Include actual ref_id if needed
-                //             });
-                //         }
-                        
-                //     }
-                // }
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 info!("{client_id:?} disconnected: {reason}");

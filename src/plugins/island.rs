@@ -4,6 +4,7 @@ use crate::components::enemy::*;
 use crate::components::humanoid::*;
 use crate::components::overworld::*;
 use crate::components::island::*;
+use crate::components::player::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
 use crate::components::player::Player;
 use crate::preludes::network_preludes::*;
@@ -65,6 +66,7 @@ fn island_player_init(
 
         if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
             commands.entity(entity).insert(NewCameraTarget);
+            commands.entity(entity).insert(LocalPlayer);
         }
     }
 }

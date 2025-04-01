@@ -13,7 +13,7 @@ use plugins::camera::CameraPlugin;
 
 use plugins::humanoid::HumanoidPlugin;
 use plugins::enemy::EnemyPlugin;
-use plugins::player::PlayerPlugin;
+use plugins::island_controls::PlayerPlugin;
 
 use plugins::overworld::OverworldPlugin;
 

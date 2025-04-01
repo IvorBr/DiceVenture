@@ -231,7 +231,6 @@ fn island_proximity(
     }
 }
 
-
 fn on_clicked_island(
     click: Trigger<Pointer<Click>>,
     mut commands: Commands, 
