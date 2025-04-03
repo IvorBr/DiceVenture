@@ -223,9 +223,9 @@ fn update_attack_lerp(
         let t = t.clamp(0.0, 1.0);
 
         let offset = if t < 0.5 {
-            lerp.direction.as_vec3() * (t * 2.0 * 0.2)
+            lerp.direction.as_vec3() * (t * 5.0 * 0.2)
         } else {
-            lerp.direction.as_vec3() * ((1.0 - t) * 2.0 * 0.2)
+            lerp.direction.as_vec3() * ((1.0 - t) * 5.0 * 0.2)
         };
 
         let base = position.0.as_vec3();
