@@ -1,4 +1,7 @@
 use bevy::{math::VectorSpace, prelude::*, state::commands};
+use bevy_replicon::prelude::RepliconClient;
+use bevy_replicon::core::ClientId;
+use bevy_replicon::server::ServerEvent;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget};
@@ -40,12 +43,12 @@ impl Plugin for OverworldPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((MeshPickingPlugin, MaterialPlugin::<WaterMaterial>::default()))
-        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, reuse_overworld, spawn_overworld_ui))
+        .add_systems(OnEnter(GameState::Overworld), (activate_overworld, spawn_overworld_ui))
         .add_systems(OnExit(GameState::Overworld), overworld_cleanup)
+        .add_systems(Startup, spawn_overworld.run_if(in_state(GameState::Overworld)))
         .add_systems(
             Update,
             (
-                ship_movement_system.run_if(in_state(GameState::Overworld)),
                 island_proximity.run_if(in_state(GameState::Overworld)),
             )
         );
@@ -91,7 +94,7 @@ fn spawn_overworld_ui(
     });
 }
 
-fn reuse_overworld(
+fn activate_overworld(
     mut commands: Commands,
     mut overworld_query: Query<&mut Visibility, With<OverworldRoot>>,
     ship_query: Query<Entity, With<Ship>>
@@ -110,7 +113,8 @@ fn spawn_overworld(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
-    overworld_query: Query<&OverworldRoot>
+    overworld_query: Query<&OverworldRoot>,
+    client: Res<RepliconClient>,
 ) {
     if let Ok(_) = overworld_query.get_single() {
         return;
@@ -167,18 +171,6 @@ fn spawn_overworld(
         )).observe(on_clicked_island)
         .set_parent(overworld_root);
     }
-
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.65, 0.45, 0.25),
-            ..Default::default()
-        })),
-        Transform::from_xyz(0.0, 0.0, 0.75),
-        Ship,
-        Visibility::Inherited,
-        NewCameraTarget
-    )).set_parent(overworld_root);
 }
 
 fn island_proximity_check(
@@ -259,39 +251,5 @@ fn on_clicked_ocean(
 
     if let Ok(local_ship) = ship.get_single() {
         commands.entity(local_ship).insert(CameraTarget);
-    }
-}
-
-fn ship_movement_system(
-    time: Res<Time>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ship: Query<&mut Transform, (With<Ship>, Without<Ocean>)>,
-    mut ocean: Query<&mut Transform, (Without<Ship>, With<Ocean>)>,
-) {
-    for mut ship_transform in &mut ship {
-        let mut direction = Vec3::ZERO;
-
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            direction.z -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            direction.z += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            direction.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            direction.x += 1.0;
-        }
-
-        if direction != Vec3::ZERO {
-            let speed = 5.0;
-            ship_transform.translation += direction.normalize() * speed * time.delta_secs();
-            
-            for mut ocean_transform in &mut ocean {
-                ocean_transform.translation.x = ship_transform.translation.x;
-                ocean_transform.translation.z = ship_transform.translation.z;
-            }
-        }
     }
 }

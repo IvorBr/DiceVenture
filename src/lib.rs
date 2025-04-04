@@ -16,6 +16,7 @@ use plugins::enemy::EnemyPlugin;
 use plugins::island_controls::PlayerPlugin;
 
 use plugins::overworld::OverworldPlugin;
+use plugins::ship::ShipPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
 enum GameState {
@@ -27,6 +28,9 @@ pub const CHUNK_SIZE : i32 = 16;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct IslandSet;
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct OverworldSet;
 
 pub struct AppPlugin;
 impl Plugin for AppPlugin {
@@ -45,11 +49,15 @@ impl Plugin for AppPlugin {
         .configure_sets(PreUpdate, (
             IslandSet.run_if(in_state(GameState::Island)),
         ))
+        .configure_sets(Update, (
+            OverworldSet.run_if(in_state(GameState::Overworld)),
+        ))
         .add_plugins((
             NetworkPlugin,
             CameraPlugin,
             
             OverworldPlugin,
+            ShipPlugin,
 
             IslandPlugin,
             PlayerPlugin,

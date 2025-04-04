@@ -3,6 +3,9 @@ use bevy::prelude::*;
 use crate::components::enemy::SnakePart;
 use crate::components::humanoid::AttackAnimation;
 use crate::components::humanoid::AttackDirection;
+use crate::components::overworld::ClientShipPosition;
+use crate::components::overworld::ServerShipPosition;
+use crate::components::overworld::Ship;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::CHUNK_SIZE;
@@ -18,9 +21,11 @@ impl Plugin for NetworkPlugin {
         .add_client_event::<MoveDirection>(ChannelKind::Ordered)
         .add_client_event::<AttackDirection>(ChannelKind::Ordered)
         .add_server_event::<MapUpdate>(ChannelKind::Ordered)
-        .add_server_event::<AttackAnimation>(ChannelKind::Ordered)
+        .add_client_event::<ClientShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
+        .add_server_event::<ServerShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
         .replicate::<Player>()
         .replicate::<Position>()
+        .replicate::<Ship>()
         .replicate::<Enemy>()
         .replicate::<Shape>()
         .replicate::<SnakePart>()
@@ -28,10 +33,10 @@ impl Plugin for NetworkPlugin {
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
         )
-        .add_systems(Update, (
+        .add_systems(Update, 
             //load_chunks.run_if(server_running), //might wanna turn on again later?
             handle_connections.run_if(server_running)
-        ).in_set(IslandSet));
+        );
     }
 }
 
@@ -101,6 +106,9 @@ fn read_cli(
 ) -> Result<(), Box<dyn Error>> {
     match *cli {
         Cli::SinglePlayer => {
+            commands.spawn(
+                Ship(ClientId::SERVER)
+            );
         }
         Cli::Server { port } => {
             let server_channels_config = channels.get_server_configs();
@@ -133,6 +141,10 @@ fn read_cli(
                 },
                 TextColor(Color::WHITE)
             ));
+
+            commands.spawn(
+                Ship(ClientId::SERVER)
+            );
         }
         Cli::Client { port, ip } => {
             let server_channels_config = channels.get_server_configs();
@@ -173,25 +185,21 @@ fn read_cli(
     Ok(())
 }
 
-// Logs server events and spawns a new player whenever a client connects.
 fn handle_connections(mut commands: Commands, 
     mut server_events: EventReader<ServerEvent>,
-    players: Query<(Entity, &Player), With<Player>>,
 ) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
                 info!("{client_id:?} connected");
+                commands.spawn(
+                    Ship(*client_id)
+                );
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 info!("{client_id:?} disconnected: {reason}");
 
                 //clean up all player stuff, curently just the player...
-                for (entity, player) in players.iter() {
-                    if player.0 == *client_id {
-                        commands.entity(entity).insert(RemoveEntity);
-                    }
-                }
             }
         }
     }

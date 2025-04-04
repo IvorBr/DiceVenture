@@ -18,7 +18,7 @@ impl Plugin for IslandPlugin {
         .add_systems(OnExit(GameState::Island), island_cleanup)
         .add_systems(Update, (
             update_island, 
-            (island_player_init, detect_leave, detect_objective).in_set(IslandSet)
+            (spawn_island_player, detect_leave, detect_objective).in_set(IslandSet)
         ));
     }
 }
@@ -41,7 +41,7 @@ fn island_cleanup(
     }
 }
 
-fn island_player_init(
+fn spawn_island_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -64,7 +64,7 @@ fn island_player_init(
             ),
         ));
 
-        if (client_id.is_some() && player.0 == client_id.unwrap()) || (!client_id.is_some() && player.0 == ClientId::SERVER) {
+        if client_id.map_or(player.0 == ClientId::SERVER, |id| id == player.0) {
             commands.entity(entity).insert(NewCameraTarget);
             commands.entity(entity).insert(LocalPlayer);
         }
@@ -112,19 +112,10 @@ fn setup_island(
 
     map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
 
-    //spawn player
-    let client_id = client.id();
-    if client_id.is_some() {
-        commands.spawn((
-            Player(client_id.unwrap()),
-            Position(IVec3::new(6,1,5))
-        ));
-    } else {
-        commands.spawn((
-            Player(ClientId::SERVER), 
-            Position(IVec3::new(6,1,5))
-        ));
-    }
+    commands.spawn((
+        Player(client.id().unwrap_or(ClientId::SERVER)),
+        Position(IVec3::new(6,1,5))
+    ));
 }
 
 fn detect_objective(

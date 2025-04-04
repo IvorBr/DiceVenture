@@ -5,3 +5,4 @@ pub mod camera;
 pub mod humanoid;
 pub mod overworld;
 pub mod island;
+pub mod ship;
