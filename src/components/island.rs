@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IslandType {
@@ -28,3 +29,6 @@ pub struct EleminationObjective;
 
 #[derive(Component)]
 pub struct IslandRoot;
+
+#[derive(Debug, Deserialize, Event, Serialize)]
+pub struct EnteredIsland;

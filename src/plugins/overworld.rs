@@ -1,7 +1,8 @@
 use bevy::{math::VectorSpace, prelude::*, state::commands};
-use bevy_replicon::prelude::RepliconClient;
+use bevy_replicon::prelude::{FromClient, RepliconClient};
 use bevy_replicon::core::ClientId;
 use bevy_replicon::server::ServerEvent;
+use crate::components::island::EnteredIsland;
 use crate::components::player::LocalPlayer;
 use crate::GameState;
 use crate::components::overworld::*;
@@ -203,6 +204,7 @@ fn island_proximity(
     island_query: Query<(Entity, &Transform), With<Island>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<NextState<GameState>>,
+    mut player_enter_event: EventWriter<EnteredIsland>
 ) {
     if let Ok(ship_transform) = ship_query.get_single() {
         let island_transforms: Vec<(Entity, Transform)> = island_query.iter().map(|(e, t)| (e, *t)).collect();
@@ -216,6 +218,7 @@ fn island_proximity(
                 if keyboard_input.pressed(KeyCode::KeyF) {
                     commands.entity(entity).insert(SelectedIsland);
                     state.set(GameState::Island);
+                    player_enter_event.send(EnteredIsland);
                 }
             } else {
                 *proximity_ui_visibility = Visibility::Hidden;

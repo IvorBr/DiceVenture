@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::components::enemy::SnakePart;
 use crate::components::humanoid::AttackAnimation;
 use crate::components::humanoid::AttackDirection;
+use crate::components::island::EnteredIsland;
 use crate::components::overworld::ClientShipPosition;
 use crate::components::overworld::ServerShipPosition;
 use crate::components::overworld::Ship;
@@ -23,6 +24,7 @@ impl Plugin for NetworkPlugin {
         .add_server_event::<MapUpdate>(ChannelKind::Ordered)
         .add_client_event::<ClientShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
         .add_server_event::<ServerShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
+        .add_client_event::<EnteredIsland>(ChannelKind::Unordered)
         .replicate::<Player>()
         .replicate::<Position>()
         .replicate::<Ship>()
