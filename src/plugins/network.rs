@@ -9,7 +9,6 @@ use crate::components::overworld::Ship;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::CHUNK_SIZE;
-use crate::IslandSet;
 
 use clap::Parser;
 pub struct NetworkPlugin;
@@ -20,6 +19,7 @@ impl Plugin for NetworkPlugin {
         .insert_resource(Map::new())
         .add_client_event::<MoveDirection>(ChannelKind::Ordered)
         .add_client_event::<AttackDirection>(ChannelKind::Ordered)
+        .add_server_event::<AttackAnimation>(ChannelKind::Unreliable)
         .add_server_event::<MapUpdate>(ChannelKind::Ordered)
         .add_client_event::<ClientShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
         .add_server_event::<ServerShipPosition>(ChannelKind::Unreliable) //TODO: MISSCHINE RELIABLE?
@@ -199,7 +199,7 @@ fn handle_connections(mut commands: Commands,
             ServerEvent::ClientDisconnected { client_id, reason } => {
                 info!("{client_id:?} disconnected: {reason}");
 
-                //clean up all player stuff, curently just the player...
+                //clean up all player stuff, player and ship
             }
         }
     }

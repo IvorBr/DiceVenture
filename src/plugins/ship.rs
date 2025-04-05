@@ -31,7 +31,6 @@ fn spawn_overworld_ship(
     mut ships: Query<(Entity, &Ship), (With<Ship>, Without<Transform>)>,
     client: Res<RepliconClient>,
     world_root_query: Query<Entity, With<OverworldRoot>>,
-    starter_island: Query<&Transform, With<StarterIsland>> //voor spawn
 ) {
     if let Ok(overworld_root) = world_root_query.get_single() {
         let client_id = client.id();

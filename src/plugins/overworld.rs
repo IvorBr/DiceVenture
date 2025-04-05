@@ -2,6 +2,7 @@ use bevy::{math::VectorSpace, prelude::*, state::commands};
 use bevy_replicon::prelude::RepliconClient;
 use bevy_replicon::core::ClientId;
 use bevy_replicon::server::ServerEvent;
+use crate::components::player::LocalPlayer;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget};
@@ -198,7 +199,7 @@ fn island_proximity_check(
 fn island_proximity(
     mut commands: Commands,
     mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
-    ship_query: Query<&Transform, With<Ship>>,
+    ship_query: Query<&Transform, (With<Ship>, With<LocalPlayer>)>,
     island_query: Query<(Entity, &Transform), With<Island>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<NextState<GameState>>,
