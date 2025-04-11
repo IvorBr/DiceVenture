@@ -20,6 +20,7 @@ use plugins::ship::ShipPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
 enum GameState {
+    Initializing,
     Overworld,
     Island,
 }
@@ -42,7 +43,7 @@ impl Plugin for AppPlugin {
         }),
         ..default()
         }))
-        .insert_state(GameState::Overworld)
+        .insert_state(GameState::Initializing)
         .configure_sets(Update, (
             IslandSet.run_if(in_state(GameState::Island)),
         ))

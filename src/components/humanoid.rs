@@ -1,4 +1,3 @@
-use bevy_replicon::core::ClientId;
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 
@@ -55,7 +54,7 @@ pub struct Humanoid;
 
 #[derive(Debug, Deserialize, Event, Serialize)]
 pub struct AttackAnimation {
-    pub client_id: ClientId,
+    pub client_entity: Entity,
     pub direction: IVec3,
 }
 

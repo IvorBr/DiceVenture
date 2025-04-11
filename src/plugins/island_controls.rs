@@ -1,23 +1,25 @@
 use bevy::prelude::*;
-use bevy::text::cosmic_text::Action;
-
 use crate::components::humanoid::ActionState;
 use crate::components::humanoid::AttackAnimation;
 use crate::components::humanoid::AttackDirection;
 use crate::components::humanoid::AttackLerp;
+use crate::components::island::OnIsland;
+use crate::components::island_maps::IslandMaps;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};
 use crate::IslandSet;
+
+use super::network::OwnedBy;
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Update, (
-                movement_input, apply_movement, 
-                attack_input, apply_attack, animate_attack, update_attack_lerp
-            ).in_set(IslandSet));
+            (apply_attack, apply_movement).run_if(server_running),
+            (movement_input, attack_input, animate_attack, update_attack_lerp).in_set(IslandSet)
+        ));
     }
 }
 
@@ -93,13 +95,14 @@ fn attack_input(
 
 fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut players: Query<(&Player, &mut Position, Entity), With<Player>>,
-    mut map: ResMut<Map>,
-    //mut enemies: Query<&mut Health, With<Enemy>>,
+    mut players: Query<(&OwnedBy, &mut Position, Entity, &OnIsland), With<Player>>,
+    mut islands: ResMut<IslandMaps>,
 ) {
-    for FromClient { client_id, event } in move_events.read() {
-        for (player, mut position, player_entity) in &mut players {
-            if *client_id == player.0 {
+    for FromClient { client_entity, event } in move_events.read() {
+        for (owner, mut position, player_entity, island) in &mut players {
+            let map = islands.get_map_mut(island.0);
+
+            if *client_entity == owner.0 {
                 let mut new_position = event.0;
                 let current_pos = position.0.clone();
                 new_position.x += current_pos.x;
@@ -156,20 +159,22 @@ fn apply_movement(
 fn apply_attack(
     mut attack_events: EventReader<FromClient<AttackDirection>>,
     mut attack_animation_events: EventWriter<ToClients<AttackAnimation>>,
-    players: Query<(&Player, &Position)>,
+    players: Query<(&OwnedBy, &Position, &OnIsland), With<Player>>,
     mut enemies: Query<&mut Health, With<Enemy>>,
-    map: Res<Map>,
+    islands: Res<IslandMaps>,
 ) {
-    for FromClient { client_id, event } in attack_events.read() {
-        for (player, position) in &players {
-            if *client_id != player.0 {
+    for FromClient { client_entity, event } in attack_events.read() {
+        for (owner, position, island) in &players {
+            if *client_entity != owner.0 {
                 continue;
             }
+
+            let map = islands.get_map(island.0);
 
             attack_animation_events.send(ToClients {
                 mode: SendMode::Broadcast,
                 event: AttackAnimation {
-                    client_id: *client_id,
+                    client_entity: *client_entity,
                     direction: event.0
                 }
             });
@@ -194,11 +199,11 @@ fn apply_attack(
 fn animate_attack(
     mut commands: Commands,
     mut attack_animation_events: EventReader<AttackAnimation>,
-    mut players: Query<(Entity, &Player, &mut ActionState)>
+    mut players: Query<(Entity, &OwnedBy, &mut ActionState), With<Player>>
 ) {
-    for AttackAnimation { client_id, direction } in attack_animation_events.read() {
-        for (entity, player, mut action_state) in players.iter_mut() {
-            if *client_id != player.0 {
+    for AttackAnimation { client_entity, direction } in attack_animation_events.read() {
+        for (entity, owner, mut action_state) in players.iter_mut() {
+            if *client_entity != owner.0 {
                 continue;
             }
             

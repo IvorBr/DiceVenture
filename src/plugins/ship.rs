@@ -1,10 +1,11 @@
 use bevy::prelude::*;
-use bevy_replicon::prelude::{FromClient, RepliconClient, SendMode, ToClients};
+use bevy_replicon::prelude::{FromClient, SendMode, ToClients};
 use crate::components::player::LocalPlayer;
-use crate::{GameState, OverworldSet};
+use crate::OverworldSet;
 use crate::components::overworld::*;
 use crate::plugins::camera::NewCameraTarget;
-use bevy_replicon::core::ClientId;
+
+use super::network::OwnedBy;
 
 pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
@@ -28,13 +29,11 @@ fn spawn_overworld_ship(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut ships: Query<(Entity, &Ship), (With<Ship>, Without<Transform>)>,
-    client: Res<RepliconClient>,
+    mut ships: Query<(Entity, Option<&LocalPlayer>), (With<Ship>, Without<Transform>)>,
     world_root_query: Query<Entity, With<OverworldRoot>>,
 ) {
     if let Ok(overworld_root) = world_root_query.get_single() {
-        let client_id = client.id();
-        for (entity, ship) in ships.iter_mut() {
+        for (entity, local) in ships.iter_mut() {
             commands.entity(entity).insert((
                 Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
                 MeshMaterial3d(materials.add(StandardMaterial {
@@ -45,8 +44,7 @@ fn spawn_overworld_ship(
                 Visibility::Inherited
             )).set_parent(overworld_root);
     
-            if client_id.map_or(ship.0 == ClientId::SERVER, |id| id == ship.0) {
-                commands.entity(entity).insert(LocalPlayer);
+            if local.is_some() { 
                 commands.entity(entity).insert(NewCameraTarget);
             }
         }
@@ -92,11 +90,12 @@ fn user_ship_movement(
 
 fn client_ship_move_update(
     mut ship_move_reader: EventReader<ServerShipPosition>,
-    mut ships: Query<(&mut Transform, &Ship)>,
+    mut ships: Query<(&mut Transform, &OwnedBy), With<Ship>>,
 ){
-    for ServerShipPosition { client_id, position } in ship_move_reader.read() {
-        for (mut transform, ship) in ships.iter_mut() {
-            if ship.0 == *client_id {
+    for ServerShipPosition { client_entity, position } in ship_move_reader.read() {
+        for (mut transform, owner) in ships.iter_mut() {
+            if owner.0 == *client_entity {
+                println!("MOVING SHIP: {:?}", *client_entity);
                 transform.translation = *position;
                 break;
             }
@@ -109,11 +108,11 @@ fn server_ship_move_update(
     mut ship_move_writer: EventWriter<ToClients<ServerShipPosition>>
 
 ) {
-    for FromClient { client_id, event } in ship_move_reader.read() {
+    for FromClient { client_entity, event } in ship_move_reader.read() {
         ship_move_writer.send(ToClients {
-            mode: SendMode::BroadcastExcept(*client_id),
+            mode: SendMode::BroadcastExcept(*client_entity),
             event: ServerShipPosition {
-                client_id: *client_id,
+                client_entity: *client_entity,
                 position: event.0,
             }
         });

@@ -1,40 +1,10 @@
 use bevy::prelude::*;
-use crate::components::humanoid::{Health, Position};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
 
 use super::humanoid::Humanoid;
 
-#[derive(Bundle, Default)]
-pub struct EnemyBundle {
-    pub enemy: Enemy,
-    pub position: Position,
-    pub health: Health,
-    pub replicated: Replicated,
-}
-
-impl EnemyBundle {
-    pub fn new_with_movement(health: u128, pos_vec: IVec3, movement: MovementType) -> Self {
-        Self {
-            position: Position(pos_vec),
-            enemy: Enemy {
-                movement,
-                ..Enemy::default()
-            },
-            health: Health::new(health),
-            replicated: Replicated,
-        }
-    }
-
-    pub fn new(health: u128, pos_vec: IVec3) -> Self {
-        Self::new_with_movement(health, pos_vec, MovementType::Standard)
-    }
-
-    fn default() -> Self {
-        Self::new(100, IVec3::ZERO)
-    }
-}
 
 #[derive(Serialize, Deserialize, Default)]
 pub enum MovementType {
@@ -45,8 +15,7 @@ pub enum MovementType {
 }
 
 #[derive(Component, Serialize, Deserialize)]
-#[require(Humanoid)]
-#[require(Replicated)]
+#[require(Replicated, Humanoid)]
 pub struct Enemy {
     pub movement: MovementType,
     //pub attacks?
@@ -104,15 +73,21 @@ pub struct SnakePart {
     pub next: Option<Entity>
 }
 
-#[derive(Component)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub enum AttackPhase {
     Windup,  
-    Strike,
+    Strike
 }
 
-#[derive(Component)]
+#[derive(Component, Deserialize, Serialize, Clone)]
 pub struct WindUp {
     pub target_pos: IVec3,
     pub timer: Timer,
     pub phase: AttackPhase,
+}
+
+#[derive(Deserialize, Event, Serialize)]
+pub struct StartAttack {
+    pub enemy: Entity,
+    pub attack: WindUp
 }

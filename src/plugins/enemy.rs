@@ -3,8 +3,12 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 
 use crate::components::enemy::AttackPhase;
+use crate::components::enemy::StartAttack;
 use crate::components::enemy::WindUp;
 use crate::components::humanoid::ActionState;
+use crate::components::island::OnIsland;
+use crate::components::island_maps::IslandMaps;
+use crate::components::overworld::{LocalIsland, Island};
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
@@ -14,12 +18,15 @@ pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(PreUpdate, init_enemy.in_set(IslandSet))
-        .add_systems(Update, (
-            move_enemies.run_if(server_running),
-            attack_check,
-            windup_and_attack
-        ).in_set(IslandSet));
+        .add_systems(PreUpdate,
+            (client_add_attack.before(visual_windup_and_attack), 
+            (init_enemy, visual_windup_and_attack).in_set(IslandSet))
+        )
+        .add_systems(Update, ( 
+            attack_clean_up,
+            (move_enemies, attack_check).run_if(server_running))
+        )
+        .add_server_event::<StartAttack>(Channel::Unordered);
     }
 }
 
@@ -27,22 +34,25 @@ fn init_enemy(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Transform>)>,
+    enemies: Query<(Entity, &Position, &OnIsland), (With<Enemy>, Without<Transform>)>,
     enemy_shapes: Query<&Shape>,
     snake_parts: Query<&SnakePart, Without<Transform>>,
+    local_island: Query<&Island, With<LocalIsland>>,
 ) {
-    for (entity, position) in &enemies {
-        println!("{}", "enemy spawned");
+    for (entity, position, island) in &enemies {
+        if island.0 != local_island.single().0 {
+            continue;
+        }
+        
+        println!("{:?} enemy spawned", entity);
 
         commands.entity(entity).insert((
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::srgb_u8(200, 50, 50),
                 ..Default::default()
             })),
             Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32),
-            MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
         ));
 
         if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
@@ -81,7 +91,7 @@ fn init_enemy(
 
         // Spawn visual parts for each offset
         if enemy_shapes.get(entity).is_ok() {
-            for offset in &enemy_shapes.get(entity).unwrap().0 {
+            for offset in &enemy_shapes.get(entity).expect("Shape was not found.").0 {
                 let part_position = *offset;
                 let child = commands.spawn((
                     Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
@@ -104,12 +114,14 @@ fn init_enemy(
 
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>, &mut Transform), (With<Enemy>, Without<Player>, Without<WindUp>)>,
+    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>, &OnIsland), (With<Enemy>, Without<Player>, Without<WindUp>)>,
     players: Query<&Position, With<Player>>,
-    mut map: ResMut<Map>,
+    mut islands: ResMut<IslandMaps>,
     mut snake_parts: Query<(&SnakePart, &mut Position), (Without<Enemy>, Without<Player>)>,
 ) {
-    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape, mut transform) in enemies.iter_mut() {
+    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape, island) in enemies.iter_mut() {
+        let map = islands.get_map_mut(island.0);
+
         if timer.0.tick(time.delta()).just_finished() {
             let mut closest_player: Option<IVec3> = None;
             let mut closest_distance: i32 = i32::MAX;
@@ -176,11 +188,6 @@ fn move_enemies(
                     }
 
                     enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
-                    let move_dir = (*next_step - closest_offset).as_vec3();
-                    if move_dir.length_squared() > 0.0 {
-                        let yaw = move_dir.x.atan2(move_dir.z);
-                        transform.rotation = Quat::from_rotation_y(-yaw);
-                    }
                     map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
 
                     if let Some(shape) = shape {
@@ -287,22 +294,62 @@ fn get_valid_neighbors(position: IVec3, map: &Map) -> Vec<IVec3> {
     neighbors
 }
 
+
+fn client_add_attack(
+    mut commands: Commands,
+    mut attack_event: EventReader<StartAttack>
+){
+    for StartAttack { enemy, attack } in attack_event.read() {
+        println!("ADDED ATTACK for {:?}", *enemy);
+        let mut entity = commands.entity(*enemy);
+        entity.insert(attack.clone());
+    }
+}
+
+fn attack_clean_up(
+    mut commands: Commands,
+    mut enemies: Query<(Entity, &mut WindUp)>,
+    time: Res<Time>,
+){
+    for (entity, mut windup) in enemies.iter_mut() {
+        if windup.timer.finished() {
+            if windup.phase == AttackPhase::Windup {
+                windup.phase = AttackPhase::Strike;
+                windup.timer = Timer::from_seconds(0.25, TimerMode::Once);
+            }
+            else {
+                println!("REMOVING ATTACK");
+                commands.entity(entity).remove::<WindUp>();
+            }
+        }
+
+        windup.timer.tick(time.delta());
+    }
+}
+
 //check if enemy can attack
 fn attack_check(
-    mut commands: Commands,
     enemies: Query<(Entity, &Position), (With<Enemy>, Without<Player>, Without<WindUp>)>,
     players: Query<&Position, With<Player>>,
+    mut attack_event: EventWriter<ToClients<StartAttack>>
 ) {
     for (enemy_entity, enemy_pos) in enemies.iter() {
         for player_pos in players.iter() {
             let delta = player_pos.0 - enemy_pos.0;
 
             if delta.abs().x + delta.abs().y + delta.abs().z == 1 {
-                commands.entity(enemy_entity).insert(WindUp {
-                    target_pos: player_pos.0,
-                    timer: Timer::from_seconds(0.5, TimerMode::Once),
-                    phase: AttackPhase::Windup,
+                attack_event.send(ToClients { 
+                    mode: SendMode::Broadcast, 
+                    event: StartAttack { 
+                        enemy: enemy_entity, 
+                        attack: WindUp {
+                            target_pos: player_pos.0,
+                            timer: Timer::from_seconds(0.5, TimerMode::Once),
+                            phase: AttackPhase::Windup
+                        }
+                    }
                 });
+
                 break;
             }
         }
@@ -310,75 +357,72 @@ fn attack_check(
 }
 
 use std::f32::consts::PI;
-
-fn windup_and_attack(
-    time: Res<Time>,
+fn visual_windup_and_attack(
     mut commands: Commands,
-    mut enemies: Query<(Entity, &mut WindUp, &Position, &mut Transform, &mut ActionState), With<Enemy>>,
+    mut enemies: Query<(Entity, Option<&WindUp>, &Position, &mut Transform, &mut ActionState), With<Enemy>>,
     players: Query<(Entity, &Position), With<Player>>,
 ) {
-    for (entity, mut windup, enemy_pos, mut transform, mut action_state) in enemies.iter_mut() {
-        if *action_state == ActionState::Moving {
-            continue;
-        }
 
-        windup.timer.tick(time.delta());
+    // for (entity, windup, enemy_pos, mut transform, mut action_state) in enemies.iter_mut() {
+    //     println!("NOT EVEN HERE");
+    //     match *action_state {
+    //         ActionState::Idle => {
+    //             commands.entity(entity).insert(ActionState::Attacking);
+    //         }
+    //         ActionState::Moving => continue,
+    //         _ => {}
+    //     }
 
-        let direction = (windup.target_pos - enemy_pos.0).as_vec3().normalize_or_zero();
-        let base_pos = enemy_pos.0.as_vec3();
-        let forward_offset = direction * 0.4;
+    //     println!("REACHED");
+    //     let direction = (windup.target_pos - enemy_pos.0).as_vec3().normalize_or_zero();
+    //     let base_pos = enemy_pos.0.as_vec3();
+    //     let forward_offset = direction * 0.4;
 
-        // Phase-based tilt angle
-        let angle = match windup.phase {
-            AttackPhase::Windup => {
-                let t = windup.timer.fraction();
-                -30.0_f32.to_radians() * t
-            }
-            AttackPhase::Strike => {
-                let t = windup.timer.fraction();
-                (-30.0 + 50.0 * (PI * t).sin()).to_radians()
-            }
-        };
+    //     // Phase-based tilt angle
+    //     let angle = match windup.phase {
+    //         AttackPhase::Windup => {
+    //             let t = windup.timer.fraction();
+    //             -30.0_f32.to_radians() * t
+    //         }
+    //         AttackPhase::Strike => {
+    //             let t = windup.timer.fraction();
+    //             (-30.0 + 50.0 * (PI * t).sin()).to_radians()
+    //         }
+    //         _ => 0.0
+    //     };
 
-        // Step 1: Face the direction
-        let yaw = direction.x.atan2(direction.z); // +Z is forward
-        let facing = Quat::from_rotation_y(-yaw); // Rotate around Y to face
+    //     // Step 1: Face the direction
+    //     let yaw = direction.x.atan2(direction.z); // +Z is forward
+    //     let facing = Quat::from_rotation_y(-yaw); // Rotate around Y to face
 
-        // Step 2: Tilt forward in local space
-        let tilt = Quat::from_rotation_x(angle);
+    //     // Step 2: Tilt forward in local space
+    //     let tilt = Quat::from_rotation_x(angle);
 
-        // Step 3: Combine cleanly
-        transform.rotation = facing * tilt;
+    //     // Step 3: Combine cleanly
+    //     transform.rotation = facing * tilt;
 
-        match windup.phase {
-            AttackPhase::Windup => {
-                transform.translation = base_pos;
+    //     match windup.phase {
+    //         AttackPhase::Windup => {
+    //             transform.translation = base_pos;
+    //         }
+    //         AttackPhase::Strike => {
+    //             let t = windup.timer.fraction();
+    //             let eased = (PI * t).sin();
+    //             transform.translation = base_pos + forward_offset * eased;
 
-                if windup.timer.finished() {
-                    windup.phase = AttackPhase::Strike;
-                    windup.timer = Timer::from_seconds(0.25, TimerMode::Once);
-                    *action_state = ActionState::Attacking;
-                }
-            }
-            AttackPhase::Strike => {
-                let t = windup.timer.fraction();
-                let eased = (PI * t).sin();
-                transform.translation = base_pos + forward_offset * eased;
+    //             if windup.timer.finished() {
+    //                 transform.translation = base_pos;
+    //                 transform.rotation = facing; // reset to facing direction
 
-                if windup.timer.finished() {
-                    transform.translation = base_pos;
-                    transform.rotation = facing; // reset to facing direction
-
-                    for (player_entity, player_pos) in players.iter() {
-                        if player_pos.0 == windup.target_pos {
-                            println!("Player hit!");
-                        }
-                    }
-
-                    commands.entity(entity).remove::<WindUp>();
-                    *action_state = ActionState::Idle;
-                }
-            }
-        }
-    }
+    //                 for (player_entity, player_pos) in players.iter() {
+    //                     if player_pos.0 == windup.target_pos {
+    //                         println!("Player hit!");
+    //                     }
+    //                 }
+    //                 *action_state = ActionState::Idle;
+    //             }
+    //         }
+    //         _ => continue
+    //     }
+    // }
 }

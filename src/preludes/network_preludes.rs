@@ -18,4 +18,4 @@ pub use std::{
     time::SystemTime,
 };
 
-pub use crate::components::grid::{TileType, Tile, Map, UpdateType, MapUpdate};
+pub use crate::components::island_maps::{TileType, Tile, Map, UpdateType, MapUpdate};
