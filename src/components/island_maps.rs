@@ -5,6 +5,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::CHUNK_SIZE;
 
+#[derive(Resource, Default)]
+pub struct IslandMaps {
+    pub maps: HashMap<u64, Map>,
+}
+
+impl IslandMaps {
+    pub fn new() -> Self {
+        IslandMaps { maps: HashMap::new() }
+    }
+
+    pub fn get_map_mut(&mut self, id: u64) -> &mut Map {
+        self.maps.get_mut(&id).expect("Map for given IslandId should exist but was not found")
+    }
+
+    pub fn get_map(&self, id: u64) -> & Map {
+        self.maps.get(&id).expect("Map for given IslandId should exist but was not found")
+    }
+}
+
+
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum TileType {
     #[default]
@@ -67,15 +87,19 @@ impl Chunk {
         self.tiles[self.index(local_pos)].reset();
     }
 }
-#[derive(Resource)]
+
 pub struct Map {
     pub chunks: HashMap<IVec3, Chunk>,
+    pub active : bool,
+    pub player_count : u32
 }
 
 impl Map {
     pub fn new() -> Self {
         let chunks = HashMap::new();
-        Map { chunks }
+        let active = false;
+        let player_count = 0;
+        Map { chunks, active, player_count }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
@@ -93,6 +117,11 @@ impl Map {
             world_pos.y.rem_euclid(CHUNK_SIZE),
             world_pos.z.rem_euclid(CHUNK_SIZE),
         )
+    }
+
+    pub fn reset(&mut self) {
+        self.chunks.clear();
+        self.active = false;
     }
 
     // Get the chunk containing a given world position
@@ -151,6 +180,11 @@ impl Map {
         if let Some(chunk) = self.get_chunk_mut(position) {
             chunk.reset_tile(local_coords);
         }
+    }
+
+    pub fn add_player(&mut self, position: IVec3, entity: Entity){
+        self.player_count += 1;
+        self.add_entity_ivec3(position, Tile::new(TileType::Player, entity));
     }
 }
 

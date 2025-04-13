@@ -1,19 +1,24 @@
 use bevy::prelude::*;
 
-use crate::objects::enemy::SnakePart;
+use crate::components::humanoid::ActionState;
+use crate::components::enemy::SnakePart;
+use crate::components::island::OnIsland;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
+use crate::components::island_maps::IslandMaps;
+use crate::IslandSet;
 
 pub struct HumanoidPlugin;
 impl Plugin for HumanoidPlugin {
     fn build(&self, app: &mut App) {
         app
+        .replicate::<RemoveEntity>()
         .add_systems(PreUpdate,
             (
                 death_check.run_if(server_running).before(remove_entities),
                 (remove_entities).after(ClientSet::Receive),
-                move_entities
-            )
+                animate_movement
+            ).in_set(IslandSet)
         );
     }
 }
@@ -30,7 +35,6 @@ fn death_check(
             
             if let Ok(mut current) = snake_parts.get(entity) {
                 while let Some(next_entity) = current.next {
-                    println!("4 times, {}", next_entity);
                     commands.entity(next_entity).insert(RemoveEntity);
                     current = match snake_parts.get(next_entity) {
                         Ok(snake) => snake,
@@ -43,25 +47,34 @@ fn death_check(
 }
 
 fn remove_entities(mut commands: Commands,
-    entities: Query<(Entity, &Position), With<RemoveEntity>>,
-    mut map: ResMut<Map>,
+    entities: Query<(Entity, &Position, &OnIsland), With<RemoveEntity>>,
+    mut islands: ResMut<IslandMaps>,
 ) {
-    for (entity, position) in &entities {
-        map.remove_entity(position.0);
+    for (entity, position, island) in entities.iter() {
+        islands.get_map_mut(island.0).remove_entity(position.0);
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn_recursive();
     }
 }
 
-fn move_entities(
-    mut moved_entities: Query<(&Position, &mut Transform)>, 
+fn animate_movement(
+    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState)>, 
     time: Res<Time>
-){
-    for (position, mut transform) in &mut moved_entities {
-        if position.0.as_vec3() != transform.translation {
-            transform.translation = transform
-                .translation
-                .lerp(position.0.as_vec3(), time.delta_seconds() * 10.0);
+) {
+    for (position, mut transform, mut action_state) in &mut moved_entities {
+        if *action_state == ActionState::Attacking {
+            continue;
+        }
+
+        let target = position.0.as_vec3();
+        let current = transform.translation;
+
+        if current.distance(target) > 0.01 {
+            transform.translation = current.lerp(target, time.delta_secs() * 10.0);
+            *action_state = ActionState::Moving;
+        } else {
+            transform.translation = target;
+            *action_state = ActionState::Idle;
         }
     }
 }
