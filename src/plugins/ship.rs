@@ -5,8 +5,6 @@ use crate::OverworldSet;
 use crate::components::overworld::*;
 use crate::plugins::camera::NewCameraTarget;
 
-use super::network::OwnedBy;
-
 pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
@@ -27,7 +25,6 @@ impl Plugin for ShipPlugin {
     }
 }
 
-//TODO: function spawn ships without transforms, so they show up locally.
 fn spawn_overworld_ship(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
@@ -57,11 +54,11 @@ fn spawn_overworld_ship(
 fn user_ship_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ship: Query<&mut Transform, (With<Ship>, With<LocalPlayer>, Without<Ocean>)>,
+    mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>, Without<Ocean>)>,
     mut ocean: Query<&mut Transform, (Without<Ship>, With<Ocean>)>,
     mut commands: Commands
 ) {
-    if let Ok(mut ship_transform) = ship.get_single_mut() {
+    if let Ok((entity, mut ship_transform)) = ship.get_single_mut() {
         let mut direction = Vec3::ZERO;
 
         if keyboard_input.pressed(KeyCode::KeyW) {
@@ -86,7 +83,10 @@ fn user_ship_movement(
                 ocean_transform.translation.z = ship_transform.translation.z;
             }
 
-            commands.client_trigger(ClientShipPosition(ship_transform.translation));
+            commands.client_trigger_targets(
+                ClientShipPosition(ship_transform.translation),
+                entity
+            );
         }
     }
 }
@@ -102,21 +102,15 @@ fn client_ship_move_update(
 
 fn server_ship_move_update(
     trigger: Trigger<FromClient<ClientShipPosition>>,
-    ships: Query<(Entity, &OwnedBy), With<Ship>>,
     mut commands: Commands
 ) {
-    for (entity, owner) in ships.iter() {
-        if owner.0 == trigger.client_entity {
-            commands.server_trigger_targets(ToClients {
-                    mode: SendMode::BroadcastExcept(trigger.client_entity),
-                    event: ServerShipPosition {
-                        client_entity: trigger.client_entity,
-                        position: trigger.0,
-                    }
-                },
-                entity
-            );
-        }
-    }
-        
+    commands.server_trigger_targets(ToClients {
+            mode: SendMode::BroadcastExcept(trigger.client_entity),
+            event: ServerShipPosition {
+                client_entity: trigger.client_entity,
+                position: trigger.0,
+            }
+        },
+        trigger.entity()
+    ); 
 }
