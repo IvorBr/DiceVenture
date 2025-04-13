@@ -38,22 +38,8 @@ impl Plugin for NetworkPlugin {
         .add_observer(client_connected)
         .add_observer(client_disconnected)
         .add_observer(make_local)
-        .add_client_event::<MoveDirection>(Channel::Ordered)
-        .add_client_event::<AttackDirection>(Channel::Ordered)
-        .add_server_event::<AttackAnimation>(Channel::Unreliable)
         .add_server_event::<MapUpdate>(Channel::Ordered)
-        .add_client_event::<ClientShipPosition>(Channel::Unreliable)
-        .add_server_event::<ServerShipPosition>(Channel::Unreliable)
-        .add_client_event::<EnteredIsland>(Channel::Unordered)
-        .add_server_event::<LeaveIsland>(Channel::Unordered)
-        .replicate::<Player>()
-        .replicate::<Position>()
-        .replicate::<Ship>()
-        .replicate::<Enemy>()
-        .replicate::<Shape>()
-        .replicate::<SnakePart>()
-        .replicate::<RemoveEntity>()
-        .replicate::<OnIsland>()
+        .replicate::<OwnedBy>()
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
         );
@@ -214,7 +200,7 @@ fn read_cli(
                 TextColor::WHITE,
             ));
 
-            state.set(GameState::Overworld); //not sure if it fits here
+            state.set(GameState::Overworld);
         }
     }
 

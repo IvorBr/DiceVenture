@@ -17,7 +17,16 @@ use crate::GameState;
 pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Island), client_setup_island)
+        app
+        .add_client_event::<MoveDirection>(Channel::Ordered)
+        .add_client_event::<EnteredIsland>(Channel::Unordered)
+        .add_server_event::<LeaveIsland>(Channel::Unordered)
+        .add_client_event::<AttackDirection>(Channel::Ordered)
+        .add_server_event::<AttackAnimation>(Channel::Unreliable)
+        .replicate::<OnIsland>()
+        .replicate::<Player>()
+        .replicate::<Position>()
+        .add_systems(OnEnter(GameState::Island), client_setup_island)
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, clean_up_island.run_if(server_running))
         .add_systems(Update, (
@@ -182,7 +191,6 @@ fn player_enters_island(
     }
 }
 
-
 fn detect_objective(
     target_query: Query<&EleminationObjective>
 ) {
@@ -222,7 +230,7 @@ fn player_leaves_island(
 fn clean_up_island(
     mut commands: Commands,
     mut islands: ResMut<IslandMaps>,
-    enemy_query: Query<(Entity, &Island), With<Enemy>>,
+    enemy_query: Query<(Entity, &OnIsland), With<Enemy>>,
 ) {
     islands.maps.retain(|id, map| {
         if map.player_count == 0 {

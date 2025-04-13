@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_replicon::prelude::{FromClient, SendMode, ToClients};
+use bevy_replicon::prelude::{AppRuleExt, Channel, ClientTriggerAppExt, ClientTriggerExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
 use crate::components::player::LocalPlayer;
 use crate::OverworldSet;
 use crate::components::overworld::*;
@@ -11,13 +11,16 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app
+        .replicate::<Ship>()
+        .add_client_trigger::<ClientShipPosition>(Channel::Unreliable)
+        .add_server_trigger::<ServerShipPosition>(Channel::Unreliable)
+        .add_observer(server_ship_move_update)
+        .add_observer(client_ship_move_update)
         .add_systems(
             Update,
             (   (
                 user_ship_movement,
                 spawn_overworld_ship,
-                client_ship_move_update,
-                server_ship_move_update
                 ).in_set(OverworldSet),
             )
         );
@@ -56,7 +59,7 @@ fn user_ship_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut ship: Query<&mut Transform, (With<Ship>, With<LocalPlayer>, Without<Ocean>)>,
     mut ocean: Query<&mut Transform, (Without<Ship>, With<Ocean>)>,
-    mut ship_move_writer: EventWriter<ClientShipPosition>,
+    mut commands: Commands
 ) {
     if let Ok(mut ship_transform) = ship.get_single_mut() {
         let mut direction = Vec3::ZERO;
@@ -83,38 +86,37 @@ fn user_ship_movement(
                 ocean_transform.translation.z = ship_transform.translation.z;
             }
 
-            ship_move_writer.send(ClientShipPosition(ship_transform.translation));
+            commands.client_trigger(ClientShipPosition(ship_transform.translation));
         }
     }
 }
 
 fn client_ship_move_update(
-    mut ship_move_reader: EventReader<ServerShipPosition>,
-    mut ships: Query<(&mut Transform, &OwnedBy), With<Ship>>,
+    trigger: Trigger<ServerShipPosition>,
+    mut ships: Query<&mut Transform, With<Ship>>,
 ){
-    for ServerShipPosition { client_entity, position } in ship_move_reader.read() {
-        for (mut transform, owner) in ships.iter_mut() {
-            if owner.0 == *client_entity {
-                println!("MOVING SHIP: {:?}", *client_entity);
-                transform.translation = *position;
-                break;
-            }
-        }
+    if let Ok(mut transform) = ships.get_mut(trigger.entity()) {
+        transform.translation = trigger.position;
     }
 }
 
 fn server_ship_move_update(
-    mut ship_move_reader: EventReader<FromClient<ClientShipPosition>>,
-    mut ship_move_writer: EventWriter<ToClients<ServerShipPosition>>
-
+    trigger: Trigger<FromClient<ClientShipPosition>>,
+    ships: Query<(Entity, &OwnedBy), With<Ship>>,
+    mut commands: Commands
 ) {
-    for FromClient { client_entity, event } in ship_move_reader.read() {
-        ship_move_writer.send(ToClients {
-            mode: SendMode::BroadcastExcept(*client_entity),
-            event: ServerShipPosition {
-                client_entity: *client_entity,
-                position: event.0,
-            }
-        });
+    for (entity, owner) in ships.iter() {
+        if owner.0 == trigger.client_entity {
+            commands.server_trigger_targets(ToClients {
+                    mode: SendMode::BroadcastExcept(trigger.client_entity),
+                    event: ServerShipPosition {
+                        client_entity: trigger.client_entity,
+                        position: trigger.0,
+                    }
+                },
+                entity
+            );
+        }
     }
+        
 }

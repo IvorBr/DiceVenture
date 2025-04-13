@@ -12,6 +12,7 @@ pub struct HumanoidPlugin;
 impl Plugin for HumanoidPlugin {
     fn build(&self, app: &mut App) {
         app
+        .replicate::<RemoveEntity>()
         .add_systems(PreUpdate,
             (
                 death_check.run_if(server_running).before(remove_entities),

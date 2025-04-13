@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::entity::{MapEntities, VisitEntities, VisitEntitiesMut}, prelude::*};
 use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
@@ -88,6 +88,5 @@ pub struct WindUp {
 
 #[derive(Deserialize, Event, Serialize)]
 pub struct StartAttack {
-    pub enemy: Entity,
     pub attack: WindUp
 }
