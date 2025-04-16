@@ -1,5 +1,11 @@
+use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
+use noise::Constant;
+use noise::Exponent;
+use noise::Multiply;
 use noise::Perlin;
+use noise::ScalePoint;
+use noise::Simplex;
 
 use crate::components::enemy::*;
 use crate::components::humanoid::*;
@@ -18,8 +24,6 @@ use crate::GameState;
 use noise::{Fbm, NoiseFn};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use std::f32::consts::PI;
-
 pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
@@ -37,8 +41,43 @@ impl Plugin for IslandPlugin {
         .add_systems(PreUpdate, clean_up_island.run_if(server_running))
         .add_systems(Update, (
             (player_enters_island, player_leaves_island, clean_up_island, detect_objective).run_if(server_running),
-            (spawn_island_player, client_player_leaves_island).in_set(IslandSet)
+            (spawn_island_player, client_player_leaves_island, input_regenerate_island).in_set(IslandSet)
         ));
+    }
+}
+
+use rand::Rng;
+fn input_regenerate_island(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    island_root_query: Query<Entity, With<IslandRoot>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if keys.just_pressed(KeyCode::KeyR) {
+        if let Ok(island_root) = island_root_query.get_single() {
+            commands.entity(island_root).despawn_recursive();
+        }
+
+        let island_root = commands
+        .spawn((
+            IslandRoot,
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            InheritedVisibility::VISIBLE
+        )).id();
+
+        let tiles = generate_atoll_tiles(rand::random());
+
+        for tile in tiles {
+            commands.spawn((
+                Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::srgb_u8(195, 180, 128),
+                    ..Default::default()
+                })),
+                Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
+            )).set_parent(island_root);
+        }
     }
 }
 
@@ -99,6 +138,7 @@ fn client_setup_island(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
+    local_island: Query<&Island, With<LocalIsland>>,
 ) {
     let island_root = commands
         .spawn((
@@ -107,8 +147,18 @@ fn client_setup_island(
             InheritedVisibility::VISIBLE
         )).id();
 
-    generate_atoll_visuals(&mut commands, &mut meshes, &mut materials, island_root, 0);
+    let tiles = generate_atoll_tiles(local_island.single().0);
 
+    for tile in tiles {
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb_u8(195, 180, 128),
+                ..Default::default()
+            })),
+            Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
+        )).set_parent(island_root);
+    }
     // Setup leave tile
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
@@ -127,7 +177,13 @@ fn server_setup_island(
     island_type: IslandType,
 ) {
     match island_type {
-        IslandType::Atoll => generate_atoll(commands, map, island, 0),
+        IslandType::Atoll => {
+            let tiles = generate_atoll_tiles(island);
+
+            for tile in tiles {
+                map.add_entity_ivec3(tile, Tile::new(TileType::Terrain, Entity::PLACEHOLDER));
+            }
+        },
         _ => {
             // fallback: simple square terrain
             for x in 0..16 {
@@ -159,100 +215,90 @@ fn server_setup_island(
     map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
 }
 
-fn generate_atoll(commands: &mut Commands, map: &mut Map, island: u64, seed: u64) {
-    let fbm : Fbm<Perlin> = Fbm::new(0);
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+pub fn generate_atoll_tiles(seed: u64) -> Vec<IVec3> {
+    let size = 50;
+    let radius = size as f32 * 0.5;
+    let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);
 
-    let size = 16;
-    let center = (size as f32 / 2.0, size as f32 / 2.0);
-    let max_radius = 5.5;
-    let amplitude = 0.5;
-    let scale = 0.15;
-    let threshold = 0.25;
+    let mut base_noise = Fbm::<Perlin>::new(seed as u32);
+    base_noise.octaves = 4;
+    base_noise.frequency = 0.07;
+
+    let mut radial_falloff = Exponent::new(
+        ScalePoint::new(Constant::new(1.0))
+        .set_x_scale(1.0 / radius as f64)
+        .set_z_scale(1.0 / radius as f64)
+    );
+    radial_falloff.exponent = 2.5;
+
+    let terrain = Multiply::new(base_noise, radial_falloff);
+
+    let mut tiles = Vec::new();
+    let threshold = 0.1;
 
     for x in 0..size {
         for z in 0..size {
-            let fx = x as f32;
-            let fz = z as f32;
+            let fx = x as f64;
+            let fz = z as f64;
 
-            let dx = fx - center.0;
-            let dz = fz - center.1;
-            let dist = (dx * dx + dz * dz).sqrt();
+            let value = terrain.get([fx, fz]);
 
-            // Ring-like falloff (value near 1 at ring)
-            let falloff = 1.0 - ((dist - max_radius) / max_radius).abs().clamp(0.0, 1.0);
+            if value > threshold {
+                let height = ((value - threshold) * 10.0).ceil() as i32;
 
-            // Fractal noise
-            let noise = fbm.get([fx as f64 * scale, fz as f64 * scale]) as f32;
-
-            // Combine
-            let height = falloff + noise * amplitude;
-
-            if height > threshold {
-                map.add_entity_ivec3(
-                    IVec3::new(x, 0, z),
-                    Tile::new(TileType::Terrain, Entity::PLACEHOLDER),
-                );
+                for y in 0..height {
+                    tiles.push(IVec3::new(x, y, z) + center_offset);
+                }
             }
         }
     }
 
-    // //spawn one enemy
-    // let enemy_pos = IVec3::new(5,1,1);
-    // let enemy_id = commands.spawn((
-    //         Enemy{..Default::default()},
-    //         Position(enemy_pos),
-    //         EleminationObjective,
-    //         MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
-    //         OnIsland(island)
-    //     )).id();
-        
-    // map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+    tiles
 }
 
-pub fn generate_atoll_visuals(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    root: Entity,
-    seed: u64,
-) {
-    let fbm : Fbm<Perlin> = Fbm::new(0);
-    let mut _rng = ChaCha8Rng::seed_from_u64(seed);
+// pub fn generate_atoll_tiles(seed: u64) -> Vec<IVec3> {
+//     use noise::{Fbm, Perlin, NoiseFn};
 
-    let size = 16;
-    let center = (size as f32 / 2.0, size as f32 / 2.0);
-    let max_radius = 5.5;
-    let amplitude = 0.5;
-    let scale = 0.15;
-    let threshold = 0.25;
+//     let fbm: Fbm<Perlin> = Fbm::new(seed as u32);
+//     let scale = 0.05;
+//     let size = 50;
+//     let threshold = 0.1;
 
-    for x in 0..size {
-        for z in 0..size {
-            let fx = x as f32;
-            let fz = z as f32;
+//     let cx = size as f32 / 2.0;
+//     let cz = size as f32 / 2.0;
+//     let ring_radius = 8.0;
+//     let ring_thickness = 6.0;
 
-            let dx = fx - center.0;
-            let dz = fz - center.1;
-            let dist = (dx * dx + dz * dz).sqrt();
+//     let mut tiles = Vec::new();
 
-            let falloff = 1.0 - ((dist - max_radius) / max_radius).abs().clamp(0.0, 1.0);
-            let noise = fbm.get([fx as f64 * scale, fz as f64 * scale]) as f32;
-            let height = falloff + noise * amplitude;
+//     let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);
 
-            if height > threshold {
-                commands.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::srgb_u8(100, 255, 100),
-                        ..default()
-                    })),
-                    Transform::from_xyz(x as f32, 0.0, z as f32),
-                )).set_parent(root);
-            }
-        }
-    }
-}
+//     for x in 0..size {
+//         for z in 0..size {
+//             let fx = x as f32;
+//             let fz = z as f32;
+
+//             let dx = fx - cx;
+//             let dz = fz - cz;
+//             let dist = (dx * dx + dz * dz).sqrt();
+
+//             let ring = 1.0 - ((dist - ring_radius).abs() / ring_thickness).clamp(0.0, 1.0);
+//             let noise = fbm.get([fx as f64 * scale, fz as f64 * scale]) as f32;
+
+//             let base = noise * ring;
+
+//             if base > threshold {
+//                 let thickness = ((base - threshold) * 8.0).ceil() as i32;
+//                 for y in 0..thickness {
+//                     tiles.push(IVec3::new(x as i32, y as i32, z as i32) + center_offset);
+//                 }
+//             }
+//         }
+//     }
+
+//     println!("tiles: {}", tiles.len());
+//     tiles
+// }
 
 fn player_enters_island(
     mut commands: Commands,
