@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum IslandType {
     #[default]
     Atoll,
+    Archipelago,
     Forest,
     Grass,
     Desert,
