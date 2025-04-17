@@ -40,7 +40,7 @@ fn spawn_overworld_ship(
                     base_color: Color::srgb(0.65, 0.45, 0.25),
                     ..Default::default()
                 })),
-                Transform::from_xyz(0.0, 0.0, 0.75),
+                Transform::from_xyz(0.0, 0.3, 0.75),
                 Visibility::Inherited
             )).set_parent(overworld_root);
     

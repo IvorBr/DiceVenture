@@ -134,11 +134,31 @@ fn spawn_island_player(
     }
 }
 
+fn find_shore_tiles(tiles: &Vec<IVec3>) -> Vec<&IVec3> {
+    let tile_set: HashSet<(i32, i32, i32)> = tiles.iter()
+        .map(|t| (t.x, t.y, t.z))
+        .collect();
+
+    tiles.iter()
+        .filter(|tile| {
+            if tile.y != 0 { return false; }
+
+            let neighbors = [
+                (tile.x + 1, 0, tile.z),
+                (tile.x - 1, 0, tile.z),
+                (tile.x, 0, tile.z + 1),
+                (tile.x, 0, tile.z - 1),
+            ];
+            neighbors.iter().any(|n| !tile_set.contains(n))
+        })
+        .collect()
+}
+
 fn client_setup_island(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    local_island: Query<&Island, With<LocalIsland>>,
+    local_island: Query<(&Island, &IslandInfo), With<LocalIsland>>,
 ) {
     let island_root = commands
         .spawn((
@@ -147,18 +167,38 @@ fn client_setup_island(
             InheritedVisibility::VISIBLE
         )).id();
 
-    let tiles = generate_atoll_tiles(local_island.single().0);
+    let (seed, island_info) = local_island.single();
 
-    for tile in tiles {
+    let (color, tiles) = match island_info.island_type {
+        IslandType::Atoll => (Color::srgb(0.9, 0.8, 0.6), generate_atoll_tiles(seed.0)),
+        IslandType::Forest => (Color::srgb(0.0, 0.4, 0.0), generate_forest_tiles(seed.0)),
+        _ => (Color::srgb(0.0, 0.4, 0.0), Vec::new()),
+    };
+
+    for tile in tiles.iter() {
         commands.spawn((
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(195, 180, 128),
+                base_color: color,
                 ..Default::default()
             })),
             Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
         )).set_parent(island_root);
     }
+
+    let shoreline_tiles: Vec<&IVec3> = find_shore_tiles(&tiles);
+
+    for tile in shoreline_tiles.iter() {
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(1.0, 1.0, 0.6),
+                ..Default::default()
+            })),
+            Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
+        )).set_parent(island_root);
+    }
+
     // Setup leave tile
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
@@ -216,6 +256,47 @@ fn server_setup_island(
 }
 
 pub fn generate_atoll_tiles(seed: u64) -> Vec<IVec3> {
+    let size = 50;
+    let radius = size as f32 * 0.5;
+    let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);
+
+    let mut base_noise = Fbm::<Perlin>::new(seed as u32);
+    base_noise.octaves = 1;
+    base_noise.frequency = 0.07;
+
+    let mut radial_falloff = Exponent::new(
+        ScalePoint::new(Constant::new(1.0))
+        .set_x_scale(1.0 / radius as f64)
+        .set_z_scale(1.0 / radius as f64)
+    );
+    radial_falloff.exponent = 2.5;
+
+    let terrain = Multiply::new(base_noise, radial_falloff);
+
+    let mut tiles = Vec::new();
+    let threshold = 0.1;
+
+    for x in 0..size {
+        for z in 0..size {
+            let fx = x as f64;
+            let fz = z as f64;
+
+            let value = terrain.get([fx, fz]);
+
+            if value > threshold {
+                let height = ((value - threshold) * 10.0).ceil() as i32;
+
+                for y in 0..height {
+                    tiles.push(IVec3::new(x, y, z) + center_offset);
+                }
+            }
+        }
+    }
+
+    tiles
+}
+
+pub fn generate_forest_tiles(seed: u64) -> Vec<IVec3> {
     let size = 50;
     let radius = size as f32 * 0.5;
     let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);

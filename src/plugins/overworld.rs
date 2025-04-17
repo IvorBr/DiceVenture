@@ -121,6 +121,7 @@ fn poisson_disk_sample_2d(
     rng: &mut impl rand::Rng,
 ) -> Vec<Vec2> {
     let mut points = Vec::new();
+    points.push(Vec2 { x: 0.0, y: 0.0 });
 
     while points.len() < num_points {
         let candidate = Vec2::new(
@@ -162,7 +163,7 @@ fn spawn_overworld(
             MeshMaterial3d(water_materials.add(WaterMaterial {
                 ..Default::default()
             })),
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_xyz(0.0, 0.3, 0.0),
             Ocean,
         ))
         .observe(on_clicked_ocean);
@@ -175,7 +176,7 @@ fn spawn_overworld(
                 base_color: Color::srgb_u8(100, 255, 100),
                 ..Default::default()
             })),
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_xyz(0.0, 0.2, 0.0),
             StarterIsland,
             Island(0),
             Visibility::Inherited,
@@ -183,7 +184,7 @@ fn spawn_overworld(
         .observe(on_clicked_island)
         .set_parent(overworld_root);
 
-    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let mut rng = ChaCha8Rng::seed_from_u64(rand::random());
     let positions = poisson_disk_sample_2d( //should end up basing this on a seed and chunk, since now we are only doing this in a small range
         Vec2::ZERO,
         5.0,     // min distance between islands
@@ -193,23 +194,38 @@ fn spawn_overworld(
     );
 
     for (i, pos) in positions.into_iter().enumerate() {
+        
+
+        let island_type = if rng.random_bool(0.5) {
+            crate::components::island::IslandType::Atoll
+        } else {
+            crate::components::island::IslandType::Forest
+        };
+        
+        let base_color = match island_type {
+            crate::components::island::IslandType::Atoll => Color::srgb(0.9, 0.8, 0.6),
+            crate::components::island::IslandType::Forest => Color::srgb(0.0, 0.4, 0.0),
+            _ => continue,
+        };
+        
+        // Spawn the island entity
         commands
-            .spawn((
-                Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    base_color: Color::srgb_u8(100, 255, 100),
-                    ..Default::default()
-                })),
-                Transform::from_xyz(pos.x, 0.0, pos.y),
-                Visibility::Inherited, 
-                Island((i + 1) as u64),
-                IslandInfo {
-                    island_type : crate::components::island::IslandType::Atoll, //should be seed based
-                    island_objective : crate::components::island::IslandObjective::Eliminate //should be seed based
-                }
-            ))
-            .observe(on_clicked_island)
-            .set_parent(overworld_root);
+        .spawn((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color,
+                ..Default::default()
+            })),
+            Transform::from_xyz(pos.x, 0.2, pos.y),
+            Visibility::Inherited, 
+            Island((i + 1) as u64),
+            IslandInfo {
+                island_type,
+                island_objective: crate::components::island::IslandObjective::Eliminate, // should also vary
+            }
+        ))
+        .observe(on_clicked_island)
+        .set_parent(overworld_root);
     }
 }
 
