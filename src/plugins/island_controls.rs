@@ -30,16 +30,16 @@ fn movement_input(
 ) {
     let mut direction = IVec3::ZERO;
 
-    if input.just_pressed(KeyCode::KeyW) {
+    if input.pressed(KeyCode::KeyW) {
         direction.z -= 1;
     }
-    if input.just_pressed(KeyCode::KeyS) {
+    if input.pressed(KeyCode::KeyS) {
         direction.z += 1;
     }
-    if input.just_pressed(KeyCode::KeyD) {
+    if input.pressed(KeyCode::KeyD) {
         direction.x += 1;
     }
-    if input.just_pressed(KeyCode::KeyA) {
+    if input.pressed(KeyCode::KeyA) {
         direction.x -= 1;
     }
 

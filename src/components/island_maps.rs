@@ -90,16 +90,16 @@ impl Chunk {
 
 pub struct Map {
     pub chunks: HashMap<IVec3, Chunk>,
-    pub active : bool,
-    pub player_count : u32
+    pub player_count : u32,
+    pub leave_position : IVec3
 }
 
 impl Map {
     pub fn new() -> Self {
         let chunks = HashMap::new();
-        let active = false;
         let player_count = 0;
-        Map { chunks, active, player_count }
+        let leave_position = IVec3::ZERO;
+        Map { chunks, player_count, leave_position }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
@@ -121,7 +121,8 @@ impl Map {
 
     pub fn reset(&mut self) {
         self.chunks.clear();
-        self.active = false;
+        self.player_count = 0;
+        self.leave_position = IVec3::ZERO;
     }
 
     // Get the chunk containing a given world position

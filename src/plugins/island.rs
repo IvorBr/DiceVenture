@@ -20,6 +20,7 @@ use crate::plugins::network::OwnedBy;
 use crate::preludes::network_preludes::*;
 use crate::IslandSet;
 use crate::GameState;
+use rand::prelude::IndexedRandom;
 
 use noise::{Fbm, NoiseFn};
 use rand::SeedableRng;
@@ -216,29 +217,38 @@ fn server_setup_island(
     island: u64,
     island_type: IslandType,
 ) {
-    match island_type {
+    let tiles = match island_type {
         IslandType::Atoll => {
             let tiles = generate_atoll_tiles(island);
 
-            for tile in tiles {
-                map.add_entity_ivec3(tile, Tile::new(TileType::Terrain, Entity::PLACEHOLDER));
+            for tile in tiles.iter() {
+                map.add_entity_ivec3(*tile, Tile::new(TileType::Terrain, Entity::PLACEHOLDER));
             }
+
+            tiles
         },
         _ => {
+            let mut tiles: Vec<IVec3> = Vec::new();
             // fallback: simple square terrain
             for x in 0..16 {
                 for z in 0..16 {
+                    tiles.push(IVec3::new(x, 0, z));
                     map.add_entity_ivec3(
                         IVec3::new(x, 0, z),
                         Tile::new(TileType::Terrain, Entity::PLACEHOLDER),
                     );
                 }
             }
-        }
-    }
 
-    // setup leave tile
-    map.add_entity_ivec3(IVec3::new(8, 0, 16), Tile::new(TileType::Terrain, Entity::PLACEHOLDER));
+            tiles
+        }
+    };
+
+    //setup leave position
+    let shore = find_shore_tiles(&tiles);
+    if let Some(spawn_tile) = shore.choose(&mut rand::rng()) {
+        map.leave_position = **spawn_tile;
+    }
 
     // spawn an enemy
     let enemy_pos = IVec3::new(5, 1, 1);
@@ -387,7 +397,6 @@ fn player_enters_island(
     mut islands: ResMut<IslandMaps>,
 ) {
     for FromClient { client_entity, event } in island_enter_event.read() {
-        let mut spawn_pos = IVec3::new(6, 1, 5);
         let island_id = event.0;
 
         let map = islands.maps.entry(island_id).or_insert_with(|| {
@@ -395,7 +404,9 @@ fn player_enters_island(
             server_setup_island(&mut commands, &mut new_map, island_id, IslandType::Atoll);
             new_map
         });
-
+        
+        let mut spawn_pos = map.leave_position;
+        spawn_pos.y += 2;
         // Find an empty vertical position above the default spawn
         while map.get_tile(spawn_pos).kind != TileType::Empty {
             spawn_pos.y += 1;
@@ -446,8 +457,9 @@ fn player_leaves_island(
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
     for (position, entity, owner, island) in &player_query {
-        if position.0 == IVec3::new(8, 1, 16) {
-            let map = islands.get_map_mut(island.0);
+        let map = islands.get_map_mut(island.0);
+
+        if position.0 == map.leave_position + IVec3::Y {
             println!("{:?} leaves island", entity);
 
             commands.entity(entity).try_despawn_recursive();
