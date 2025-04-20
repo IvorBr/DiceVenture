@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::humanoid::AttackAnimation;
@@ -5,6 +7,7 @@ use crate::components::humanoid::AttackDirection;
 use crate::components::humanoid::AttackLerp;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
+use crate::components::player::MovementCooldown;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};
@@ -16,6 +19,9 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
+        .insert_resource(MovementCooldown {
+            timer: Timer::from_seconds(0.2, TimerMode::Once),
+        })
         .add_systems(Update, (
             (apply_attack, apply_movement).run_if(server_running),
             (movement_input, attack_input, animate_attack, update_attack_lerp).in_set(IslandSet)
@@ -26,26 +32,46 @@ impl Plugin for PlayerPlugin {
 fn movement_input(
     mut move_events: EventWriter<MoveDirection>, 
     input: Res<ButtonInput<KeyCode>>,
-    camera: Query<&DollyCamera,  With<PlayerCamera>>,
+    camera: Query<&DollyCamera, With<PlayerCamera>>,
+    time: Res<Time>,
+    mut cooldown: ResMut<MovementCooldown>,
 ) {
-    let mut direction = IVec3::ZERO;
+    cooldown.timer.tick(time.delta());
 
-    if input.pressed(KeyCode::KeyW) {
+    let mut direction = IVec3::ZERO;
+    let mut just_pressed = false;
+
+    if input.just_pressed(KeyCode::KeyW) {
         direction.z -= 1;
-    }
-    if input.pressed(KeyCode::KeyS) {
+        just_pressed = true;
+    } else if input.just_pressed(KeyCode::KeyS) {
         direction.z += 1;
-    }
-    if input.pressed(KeyCode::KeyD) {
+        just_pressed = true;
+    } else if input.just_pressed(KeyCode::KeyD) {
         direction.x += 1;
-    }
-    if input.pressed(KeyCode::KeyA) {
+        just_pressed = true;
+    } else if input.just_pressed(KeyCode::KeyA) {
         direction.x -= 1;
+        just_pressed = true;
+    } else if cooldown.timer.finished() {
+        if input.pressed(KeyCode::KeyW) {
+            direction.z -= 1;
+        } else if input.pressed(KeyCode::KeyS) {
+            direction.z += 1;
+        } else if input.pressed(KeyCode::KeyD) {
+            direction.x += 1;
+        } else if input.pressed(KeyCode::KeyA) {
+            direction.x -= 1;
+        }
+    }
+
+    if direction == IVec3::ZERO {
+        return;
     }
 
     if let Ok(camera) = camera.get_single() {
         direction = match camera.direction {
-            0 => direction,                    
+            0 => direction,
             1 => IVec3::new(direction.z, 0, -direction.x),
             2 => IVec3::new(-direction.x, 0, -direction.z),
             3 => IVec3::new(-direction.z, 0, direction.x),
@@ -53,8 +79,11 @@ fn movement_input(
         };
     }
 
-    if direction != IVec3::ZERO {
+    if (just_pressed && cooldown.timer.elapsed_secs() >= 0.05)
+        || (!just_pressed && cooldown.timer.finished())
+    {
         move_events.send(MoveDirection(direction));
+        cooldown.timer.reset();
     }
 }
 

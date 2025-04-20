@@ -23,8 +23,7 @@ use crate::GameState;
 use rand::prelude::IndexedRandom;
 
 use noise::{Fbm, NoiseFn};
-use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
+
 pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
@@ -47,7 +46,6 @@ impl Plugin for IslandPlugin {
     }
 }
 
-use rand::Rng;
 fn input_regenerate_island(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,

@@ -11,3 +11,8 @@ pub struct Player;
 
 #[derive(Component)]
 pub struct LocalPlayer;
+
+#[derive(Resource)]
+pub struct MovementCooldown {
+    pub timer: Timer,
+}
