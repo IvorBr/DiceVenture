@@ -49,6 +49,7 @@ impl Plugin for OverworldPlugin {
         .add_systems(
             Update,
             (
+                move_ocean,
                 island_proximity.run_if(in_state(GameState::Overworld)),
             )
         );
@@ -250,6 +251,19 @@ fn island_proximity_check(
     }
 
     Some((best_island, best_distance, best_island_enitity))
+}
+
+fn move_ocean(
+    mut ocean: Query<&mut Transform, With<Ocean>>,
+    target: Query<&Transform, (With<CameraTarget>, Without<Ocean>)>
+){
+    if let Ok(transform) = target.get_single() {
+        for mut ocean_transform in &mut ocean {
+            ocean_transform.translation.x = transform.translation.x;
+            ocean_transform.translation.z = transform.translation.z;
+        }
+
+    }
 }
 
 fn island_proximity(

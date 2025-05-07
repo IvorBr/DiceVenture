@@ -53,21 +53,22 @@ fn input_regenerate_island(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    if keys.just_pressed(KeyCode::KeyR) {
+    if keys.pressed(KeyCode::KeyR) {
         if let Ok(island_root) = island_root_query.get_single() {
             commands.entity(island_root).despawn_recursive();
         }
 
         let island_root = commands
-        .spawn((
-            IslandRoot,
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            InheritedVisibility::VISIBLE
-        )).id();
+            .spawn((
+                IslandRoot,
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                InheritedVisibility::VISIBLE,
+            ))
+            .id();
 
         let tiles = generate_atoll_tiles(rand::random());
 
-        for tile in tiles {
+        for tile in tiles.iter() {
             commands.spawn((
                 Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
                 MeshMaterial3d(materials.add(StandardMaterial {
@@ -77,6 +78,28 @@ fn input_regenerate_island(
                 Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
             )).set_parent(island_root);
         }
+
+        let shoreline_tiles: Vec<&IVec3> = find_shore_tiles(&tiles);
+
+        for tile in shoreline_tiles.iter() {
+            commands.spawn((
+                Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::srgb(1.0, 1.0, 0.6),
+                    ..Default::default()
+                })),
+                Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
+            )).set_parent(island_root);
+        }
+
+        let min = tiles.iter().fold(IVec3::splat(i32::MAX), |a, b| a.min(*b));
+        let max = tiles.iter().fold(IVec3::splat(i32::MIN), |a, b| a.max(*b));
+        let center = (min + max) / 2;
+
+        commands.spawn((
+            NewCameraTarget,
+            Transform::from_xyz(center.x as f32, center.y as f32 + 20.0, (center.z + max.z/2) as f32),
+        ));
     }
 }
 
@@ -197,16 +220,6 @@ fn client_setup_island(
             Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
         )).set_parent(island_root);
     }
-
-    // Setup leave tile
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb_u8(100, 255, 100),
-            ..Default::default()
-        })),
-        Transform::from_xyz(8.0, 0.0, 16.0)
-    )).set_parent(island_root);
 }
 
 fn server_setup_island(
@@ -272,31 +285,34 @@ pub fn generate_atoll_tiles(seed: u64) -> Vec<IVec3> {
     base_noise.octaves = 1;
     base_noise.frequency = 0.07;
 
-    let mut radial_falloff = Exponent::new(
-        ScalePoint::new(Constant::new(1.0))
-        .set_x_scale(1.0 / radius as f64)
-        .set_z_scale(1.0 / radius as f64)
-    );
-    radial_falloff.exponent = 2.5;
-
-    let terrain = Multiply::new(base_noise, radial_falloff);
+    let terrain = base_noise;
 
     let mut tiles = Vec::new();
-    let threshold = 0.1;
+    let threshold = 0.0;
 
     for x in 0..size {
         for z in 0..size {
             let fx = x as f64;
             let fz = z as f64;
 
-            let value = terrain.get([fx, fz]);
+            let mut value = terrain.get([fx, fz]);
+
+            let dx = x as f32 - size as f32 / 2.0;
+            let dz = z as f32 - size as f32 / 2.0;
+            let distance = (dx * dx + dz * dz).sqrt() / radius;
+            value -= distance.powf(2.5) as f64 - 0.2;
 
             if value > threshold {
-                let height = ((value - threshold) * 10.0).ceil() as i32;
-
+                let mut height = ((value - threshold) * 10.0).ceil() as i32; //need to be optimized to only spawn seeable parts, can simply check for neighbours
+                if height > 3 {
+                    height = 3;
+                }
                 for y in 0..height {
                     tiles.push(IVec3::new(x, y, z) + center_offset);
                 }
+            } else {
+                println!("shallow: {value}");
+                tiles.push(IVec3::new(x, -1, z) + center_offset);
             }
         }
     }

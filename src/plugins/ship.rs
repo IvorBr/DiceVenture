@@ -54,8 +54,7 @@ fn spawn_overworld_ship(
 fn user_ship_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>, Without<Ocean>)>,
-    mut ocean: Query<&mut Transform, (Without<Ship>, With<Ocean>)>,
+    mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>)>,
     mut commands: Commands
 ) {
     if let Ok((entity, mut ship_transform)) = ship.get_single_mut() {
@@ -78,11 +77,6 @@ fn user_ship_movement(
             let speed = 5.0;
             ship_transform.translation += direction.normalize() * speed * time.delta_secs();
             
-            for mut ocean_transform in &mut ocean {
-                ocean_transform.translation.x = ship_transform.translation.x;
-                ocean_transform.translation.z = ship_transform.translation.z;
-            }
-
             commands.client_trigger_targets(
                 ClientShipPosition(ship_transform.translation),
                 entity
