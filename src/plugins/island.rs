@@ -311,8 +311,7 @@ pub fn generate_atoll_tiles(seed: u64) -> Vec<IVec3> {
                     tiles.push(IVec3::new(x, y, z) + center_offset);
                 }
             } else {
-                println!("shallow: {value}");
-                tiles.push(IVec3::new(x, -1, z) + center_offset);
+                tiles.push(IVec3::new(x, value.floor() as i32, z) + center_offset);
             }
         }
     }
