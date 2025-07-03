@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use rand::SeedableRng;
 
 use crate::components::enemy::*;
 use crate::components::humanoid::*;
@@ -7,6 +6,7 @@ use crate::components::island::*;
 use crate::components::island_maps::IslandMaps;
 use crate::components::island_maps::TerrainType;
 use crate::components::overworld::{LocalIsland, Island};
+use crate::islands::atoll::AtollPlugin;
 use crate::plugins::network::MakeLocal;
 use crate::components::player::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
@@ -15,14 +15,16 @@ use crate::plugins::network::OwnedBy;
 use crate::preludes::network_preludes::*;
 use crate::IslandSet;
 use crate::GameState;
+
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 use rand::prelude::IndexedRandom;
-use crate::islands::atoll::generate_atoll_tiles;
 
 pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app
+        .add_plugins(AtollPlugin)
         .add_client_event::<MoveDirection>(Channel::Ordered)
         .add_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)

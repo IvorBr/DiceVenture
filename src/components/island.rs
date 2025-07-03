@@ -21,3 +21,6 @@ pub struct CleanIsland;
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct OnIsland(pub u64);
+
+#[derive(Component)]
+pub struct GenerateIsland;

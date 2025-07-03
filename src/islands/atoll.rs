@@ -2,18 +2,58 @@
 use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
+use crate::components::island::GenerateIsland;
+use crate::components::overworld::Island;
 use crate::preludes::network_preludes::*;
 
 use rand::rngs::StdRng;
+use rand::SeedableRng;
+
 use rand::Rng;
 use noise::{Fbm, NoiseFn};
-use crate::components::island_maps::TerrainType;
+use crate::components::island_maps::{Map, IslandMaps, TerrainType};
 use crate::islands::core::{add_boardwalk, reserve_with_margin};
+
 
 #[derive(Component)]
 pub struct Atoll;
 
-pub fn generate_atoll_tiles(map: &mut Map,seed: u64, generator: &mut StdRng) -> Vec<IVec3> {
+pub struct AtollPlugin;
+impl Plugin for AtollPlugin {
+    fn build(&self, app: &mut App) {
+        app
+        .add_systems(Update, // setup island tiles
+            (generate_island_map.before(generate_island_server), 
+            generate_island_server.run_if(server_running))
+        );
+    }
+}
+
+fn generate_island_map(
+    mut island_maps: ResMut<IslandMaps>,
+    new_islands: Query<&Island, (With<Atoll>, With<GenerateIsland>)>
+) {
+    for island_id in new_islands.iter() {
+        //If island is already generated, return
+        let mut generator = StdRng::seed_from_u64(island_id.0);
+
+        let _map = island_maps.maps.entry(island_id.0).or_insert_with(|| {
+            let mut new_map = Map::new();
+            generate_tiles(&mut new_map, island_id.0, &mut generator);
+            new_map
+        });
+    }
+}
+
+fn generate_island_server(
+    mut commands: Commands,
+    mut island_maps: ResMut<IslandMaps>,
+    setup_islands: Query<&Island, (With<Atoll>, With<GenerateIsland>)>,
+) {
+   
+}
+
+pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<IVec3> {
     let size = 50;
     let radius = size as f32 * 0.5;
     let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);
