@@ -1,9 +1,9 @@
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
-use bevy::ecs::observer;
 use bevy::prelude::*;
 
 use crate::components::enemy::AttackPhase;
+use crate::components::enemy::EnemyState;
 use crate::components::enemy::StartAttack;
 use crate::components::enemy::WindUp;
 use crate::components::humanoid::ActionState;
@@ -14,6 +14,7 @@ use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
 use crate::IslandSet;
+use crate::components::enemy::Aggression;
 
 pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
@@ -27,7 +28,8 @@ impl Plugin for EnemyPlugin {
         )
         .add_systems(Update, ( 
             attack_clean_up,
-            (move_enemies, attack_check).run_if(server_running))
+            (aggression_handler, move_enemies, attack_check).run_if(server_running)
+        )
         )
         .add_server_trigger::<StartAttack>(Channel::Unordered)
         .add_observer(client_add_attack);
@@ -116,31 +118,63 @@ fn init_enemy(
     }
 }
 
+fn find_closest_in_range(players: &Query<(&Position, Entity), With<Player>>, enemy_pos: &Position, range: i32) -> Option<Entity> {
+    let mut closest_player: Option<Entity> = None;
+    let mut closest_distance: i32 = i32::MAX;
+
+    for (player_pos, player_entity) in players.iter() {
+        let distance = player_pos.0.distance_squared(enemy_pos.0);
+
+        if distance <= range * range && distance < closest_distance {
+            closest_player = Some(player_entity);
+            closest_distance = distance;
+        }
+    }
+    closest_player
+}
+
+fn aggression_handler(
+    mut enemies: Query<(&Position, &Aggression, &mut EnemyState)>,
+    players: Query<(&Position, Entity), With<Player>>,
+) {
+    for (enemy_position, aggression, mut state) in enemies.iter_mut() {
+        match aggression {
+            Aggression::Passive => {
+                // Never attack, maybe just Idle
+            }
+            Aggression::RangeBased(range) => {
+                if let Some(player) = find_closest_in_range(&players, enemy_position, *range) {
+                    println!("Found player");
+                    *state = EnemyState::Attacking(player);
+                } else {
+                    *state = EnemyState::Idle;
+                }
+            }
+        }
+    }
+}
+
 fn move_enemies(
     time: Res<Time>,    
-    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>, &OnIsland), (With<Enemy>, Without<Player>, Without<WindUp>)>,
+    mut enemies: Query<(Option<&SnakePart>, &mut MoveTimer, &mut Position, Entity, Option<&Shape>, &OnIsland, &EnemyState), (With<Enemy>, Without<Player>, Without<WindUp>)>,
     players: Query<&Position, With<Player>>,
     mut islands: ResMut<IslandMaps>,
     mut snake_parts: Query<(&SnakePart, &mut Position), (Without<Enemy>, Without<Player>)>,
 ) {
-    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape, island) in enemies.iter_mut() {
+    for (snake_part, mut timer, mut enemy_pos, enemy_entity, shape, island, enemy_state) in enemies.iter_mut() {
         if let Some(map) = islands.maps.get_mut(&island.0) {
             if timer.0.tick(time.delta()).just_finished() {
-                let mut closest_player: Option<IVec3> = None;
-                let mut closest_distance: i32 = i32::MAX;
-    
-                for player_pos in players.iter() {
-                    let cur_distance = enemy_pos.0.distance_squared(player_pos.0);
-                    if cur_distance < closest_distance {
-                        closest_distance = cur_distance;
-                        closest_player = Some(player_pos.0);
-                    }
-                }
-    
-                if let Some(target_pos) = closest_player {
+                
+                let enemy_target = match enemy_state {
+                    EnemyState::Attacking(target) => Some(players.get(*target).unwrap().0),
+                    _ => None
+                };
+
+                if let Some(target_pos) = enemy_target {
                     let mut closest_offset = enemy_pos.0;
                     let mut min_distance = closest_offset.distance_squared(target_pos);
                     
+                    //TODO: shape enemies should just have a main part
                     if let Some(shape) = shape {
                         for offset in &shape.0 {
                             let offset_pos = enemy_pos.0 + *offset;
@@ -165,7 +199,7 @@ fn move_enemies(
                             }
                         }
                         
-                        //snake movement logic
+                        //TODO: snake movement logic
                         if let Some(head) = snake_part {
                             if let Some(next_entity) = head.next {
                                 if let Ok(mut current) = snake_parts.get_mut(next_entity) {
@@ -269,7 +303,7 @@ fn heuristic(a: IVec3, b: IVec3) -> i32 {
 
 // Reconstruct the path
 fn reconstruct_path(came_from: HashMap<IVec3, IVec3>, mut current: IVec3) -> Vec<IVec3> {
-    let mut total_path = vec![]; // Include the goal node
+    let mut total_path = vec![]; // TODO: Include the goal node
     while let Some(&prev) = came_from.get(&current) {
         current = prev;
         total_path.push(current);
@@ -289,9 +323,22 @@ fn get_valid_neighbors(position: IVec3, map: &Map) -> Vec<IVec3> {
     ];
 
     for &dir in directions.iter() {
-        let neighbor_pos = position + dir;
-        if map.can_move(neighbor_pos) {
-            neighbors.push(neighbor_pos);
+        let target = position + dir;
+        if map.can_move(target) {
+            neighbors.push(target);
+            continue;
+        }
+
+        let climb = target + IVec3::Y;
+        if map.can_move(climb) {
+            neighbors.push(climb);
+            continue;
+        }
+
+        let drop = target - IVec3::Y;
+        if map.can_move(drop) {
+            neighbors.push(drop);
+            continue;
         }
     }
 

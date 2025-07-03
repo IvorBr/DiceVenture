@@ -5,30 +5,34 @@ use std::cmp::Ordering;
 
 use super::humanoid::Humanoid;
 
+#[derive(Component, Serialize, Deserialize)]
+#[require(Replicated, Humanoid)]
+pub struct Enemy;
 
-#[derive(Serialize, Deserialize, Default)]
-pub enum MovementType {
+#[derive(Component, Default, Serialize, Deserialize)]
+pub enum EnemyState {
+    #[default]
+    Idle,
+    Searching,
+    Attacking(Entity),
+    Fleeing,
+}
+
+#[derive(Component, Serialize, Deserialize, Default)]
+pub enum Movement {
     #[default]
     Standard,
     Snake,
     Multi,
 }
 
-#[derive(Component, Serialize, Deserialize)]
-#[require(Replicated, Humanoid)]
-pub struct Enemy {
-    pub movement: MovementType,
-    //pub attacks?
-    //pub aggressionType?
+#[derive(Component, Serialize, Deserialize, Default)]
+pub enum Aggression {
+    #[default]
+    Passive,
+    RangeBased(i32),
 }
 
-impl Default for Enemy {
-    fn default() -> Self {
-        Enemy {
-            movement: MovementType::default(),
-        }
-    }
-}
 #[derive(Component)]
 pub struct MoveTimer(pub Timer);
 

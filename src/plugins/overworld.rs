@@ -285,9 +285,9 @@ fn island_proximity(
                 *proximity_ui_visibility = Visibility::Inherited;
 
                 if keyboard_input.pressed(KeyCode::KeyF) {
-                    state.set(GameState::Island);
-                    player_enter_event.send(EnteredIsland(island_id));
                     commands.entity(island_entity).insert(LocalIsland);
+                    player_enter_event.send(EnteredIsland(island_id));
+                    state.set(GameState::Island);
                 }
             } else {
                 *proximity_ui_visibility = Visibility::Hidden;

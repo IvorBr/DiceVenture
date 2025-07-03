@@ -139,16 +139,7 @@ fn apply_movement(
                 new_position.z += current_pos.z;
                 
                 match map.get_tile(new_position).kind {
-                    // TileType::Enemy => {
-                    //     let tile = map.get_tile(new_position);
-                    //     if let Ok(mut health) = enemies.get_mut(tile.entity) {
-                    //         println!("Enemy encountered with health: {}", health.get());
-                    //         health.damage(10);
-                    //         println!("Enemy health after damage: {}", health.get());
-                    //     }
-                    //     return;
-                    // }
-                    TileType::Terrain => {
+                    TileType::Terrain(_) => {
                         new_position.y += 1;
                         let tile_above = map.get_tile(new_position);
 
@@ -157,17 +148,19 @@ fn apply_movement(
                         }
                     }
                     TileType::Empty => {
-                        let mut temp_pos = new_position;
-                        temp_pos.y -= 1;
-                        let tile_below = map.get_tile(temp_pos);
-
-                        if tile_below.kind == TileType::Empty {
+                        if new_position.y != 0 {
+                            let mut temp_pos = new_position;
                             temp_pos.y -= 1;
-                            let tile_below_terrain = map.get_tile(temp_pos);
-                            if tile_below_terrain.kind != TileType::Terrain {
-                                return;
+                            let tile_below = map.get_tile(temp_pos);
+
+                            if tile_below.kind == TileType::Empty {
+                                temp_pos.y -= 1;
+                                let tile_below_terrain = map.get_tile(temp_pos);
+                                if !matches!(tile_below_terrain.kind, TileType::Terrain(_)) {
+                                    return;
+                                }
+                                new_position.y -= 1;
                             }
-                            new_position.y -= 1;
                         }
                     }
                     _ => {

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 pub mod components;
 pub mod preludes;
 pub mod plugins;
+pub mod islands;
 
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
