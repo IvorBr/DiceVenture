@@ -46,7 +46,8 @@ fn death_check(
     }
 }
 
-fn remove_entities(mut commands: Commands,
+fn remove_entities(
+    mut commands: Commands,
     entities: Query<(Entity, &Position, &OnIsland), With<RemoveEntity>>,
     mut islands: ResMut<IslandMaps>,
 ) {

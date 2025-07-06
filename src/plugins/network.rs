@@ -2,21 +2,11 @@ use bevy::prelude::*;
 use bevy::winit::{UpdateMode::Continuous, WinitSettings};
 use serde::Deserialize;
 use serde::Serialize;
-use crate::components::enemy::SnakePart;
-use crate::components::humanoid::AttackAnimation;
-use crate::components::humanoid::AttackDirection;
-use crate::components::island::EnteredIsland;
-use crate::components::island::LeaveIsland;
-use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
-use crate::components::overworld::ClientShipPosition;
-use crate::components::overworld::ServerShipPosition;
 use crate::components::overworld::Ship;
 use crate::components::player::LocalPlayer;
 use crate::preludes::network_preludes::*;
-use crate::preludes::humanoid_preludes::*;
 use crate::GameState;
-use crate::CHUNK_SIZE;
 
 use clap::Parser;
 

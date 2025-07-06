@@ -2,7 +2,9 @@
 use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
-use crate::components::island::GenerateIsland;
+use crate::components::humanoid::Position;
+use crate::components::enemy::{Enemy, EnemyState, MoveTimer, Aggression};
+use crate::components::island::{EleminationObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
 use crate::components::overworld::Island;
 use crate::preludes::network_preludes::*;
 
@@ -30,27 +32,56 @@ impl Plugin for AtollPlugin {
 }
 
 fn generate_island_map(
+    mut commands: Commands,
     mut island_maps: ResMut<IslandMaps>,
-    new_islands: Query<&Island, (With<Atoll>, With<GenerateIsland>)>
+    new_islands: Query<(Entity, &Island), (With<Atoll>, With<GenerateIsland>)>
 ) {
-    for island_id in new_islands.iter() {
-        //If island is already generated, return
+    for (entity, island_id) in new_islands.iter() {
         let mut generator = StdRng::seed_from_u64(island_id.0);
+        let map = island_maps.maps.get(&island_id.0);
 
-        let _map = island_maps.maps.entry(island_id.0).or_insert_with(|| {
+        if !map.is_some() {
             let mut new_map = Map::new();
             generate_tiles(&mut new_map, island_id.0, &mut generator);
-            new_map
-        });
+            island_maps.maps.insert(island_id.0, new_map);
+            commands.entity(entity).insert(MapFinishedIsland).remove::<GenerateIsland>();
+            println!("Added island to the maps");
+        }
+        else {
+            commands.entity(entity).remove::<GenerateIsland>();
+        }
     }
 }
 
 fn generate_island_server(
     mut commands: Commands,
     mut island_maps: ResMut<IslandMaps>,
-    setup_islands: Query<&Island, (With<Atoll>, With<GenerateIsland>)>,
+    islands: Query<(Entity, &Island), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
-   
+    for (entity, island_id) in islands.iter() {
+        let map = island_maps.maps.get_mut(&island_id.0).unwrap();
+        let mut generator = StdRng::seed_from_u64(island_id.0);
+        
+        let top_tiles = map.above_water_top_tiles();
+        for _ in 0..5 {
+            let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
+            let enemy_id = commands
+                .spawn((
+                    Enemy,
+                    EnemyState::Idle,
+                    Position(enemy_pos),
+                    EleminationObjective,
+                    MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
+                    OnIsland(island_id.0),
+                    Aggression::RangeBased(5)
+                ))
+                .id();
+
+            map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+        }
+
+        commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();
+    }
 }
 
 pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<IVec3> {

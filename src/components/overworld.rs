@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::components::island::IslandInfo;
 use bevy_replicon::prelude::Replicated;
 
 #[derive(Component, Serialize, Deserialize, Debug)]
@@ -11,7 +10,6 @@ pub struct Ship;
 pub struct Ocean;
 
 #[derive(Component, Default)]
-#[require(IslandInfo)]
 pub struct Island(pub u64);
 
 #[derive(Component)]

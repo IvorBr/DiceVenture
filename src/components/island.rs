@@ -24,3 +24,15 @@ pub struct OnIsland(pub u64);
 
 #[derive(Component)]
 pub struct GenerateIsland;
+
+#[derive(Component)]
+pub struct MapFinishedIsland;
+
+#[derive(Component)]
+pub struct VisualizeIsland;
+
+#[derive(Component)]
+pub struct FinishedSetupIsland;
+
+#[derive(Component)]
+pub struct Waiting;

@@ -8,7 +8,7 @@ pub struct RENAMETHIS_ISLAND;
 
 fn generate_island_map(
     mut island_maps: ResMut<IslandMaps>,
-    new_islands: Query<&Island, (With<Atoll>, With<GenerateIsland>)>
+    new_islands: Query<&Island, (With<RENAMETHIS_ISLAND>, With<GenerateIsland>)>
 ) {
     for island_id in new_islands.iter() {
         //If island is already generated, return
@@ -25,9 +25,12 @@ fn generate_island_map(
 fn generate_island_server(
     mut commands: Commands,
     mut island_maps: ResMut<IslandMaps>,
-    setup_islands: Query<RENAMETHIS_ISLAND, With<SetupIsland>>,
+    islands: Query<(Entity, &Island), (With<RENAMETHIS_ISLAND>, With<MapFinishedIsland>)>,
 ) {
-   
+    for (entity, island_id) in islands.iter() {
+        setup_island();
+        commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();
+    }
 }
 
 pub struct RENAMETHIS_PLUGIN;

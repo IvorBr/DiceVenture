@@ -1,6 +1,7 @@
 use bevy::prelude::*;
-use crate::components::island::{EnteredIsland, IslandInfo};
+use crate::components::island::{EnteredIsland, GenerateIsland, VisualizeIsland};
 use crate::components::player::LocalPlayer;
+use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget};
@@ -181,6 +182,7 @@ fn spawn_overworld(
             StarterIsland,
             Island(0),
             Visibility::Inherited,
+            Atoll
         ))
         .observe(on_clicked_island)
         .set_parent(overworld_root);
@@ -195,18 +197,12 @@ fn spawn_overworld(
     );
 
     for (i, pos) in positions.into_iter().enumerate() {
-        
-
-        let island_type = if rng.random_bool(0.5) {
-            crate::components::island::IslandType::Atoll
+        let (island_type, base_color) = if rng.random_bool(0.5) {
+            (Atoll,
+            Color::srgb(0.9, 0.8, 0.6))
         } else {
-            crate::components::island::IslandType::Forest
-        };
-        
-        let base_color = match island_type {
-            crate::components::island::IslandType::Atoll => Color::srgb(0.9, 0.8, 0.6),
-            crate::components::island::IslandType::Forest => Color::srgb(0.0, 0.4, 0.0),
-            _ => continue,
+            (Atoll,
+            Color::srgb(0.0, 0.4, 0.0))
         };
         
         // Spawn the island entity
@@ -220,10 +216,7 @@ fn spawn_overworld(
             Transform::from_xyz(pos.x, 0.2, pos.y),
             Visibility::Inherited, 
             Island((i + 1) as u64),
-            IslandInfo {
-                island_type,
-                island_objective: crate::components::island::IslandObjective::Eliminate, // should also vary
-            }
+            Atoll
         ))
         .observe(on_clicked_island)
         .set_parent(overworld_root);
@@ -285,7 +278,8 @@ fn island_proximity(
                 *proximity_ui_visibility = Visibility::Inherited;
 
                 if keyboard_input.pressed(KeyCode::KeyF) {
-                    commands.entity(island_entity).insert(LocalIsland);
+                    commands.entity(island_entity).insert(LocalIsland).insert(GenerateIsland).insert(VisualizeIsland);
+                    println!("Adding generate");
                     player_enter_event.send(EnteredIsland(island_id));
                     state.set(GameState::Island);
                 }
