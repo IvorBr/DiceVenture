@@ -233,7 +233,7 @@ fn client_player_leaves_island(
 
 fn player_leaves_island(
     mut commands: Commands,
-    player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), (With<Player>)>,
+    player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Player>>,
     mut islands: ResMut<IslandMaps>,
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
@@ -256,7 +256,7 @@ fn clean_up_island(
     mut island_maps: ResMut<IslandMaps>,
     enemy_query: Query<(Entity, &OnIsland), With<Enemy>>,
     mut islands: Query<(Entity, &Island), With<MapFinishedIsland>>,
-    players: Query<&OnIsland>
+    players: Query<&OnIsland, Without<Enemy>>
 ) {
     let mut player_count: HashSet<u64> = HashSet::new();
     for island in players.iter() {
