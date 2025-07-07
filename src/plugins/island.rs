@@ -263,7 +263,7 @@ fn clean_up_island(
         player_count.insert(island.0);
     }
 
-    island_maps.maps.retain(|id, map| {
+    island_maps.maps.retain(|id, _map| {
         if !player_count.contains(id) {
             println!("No players left on island {:?}: cleaning up", id);
             

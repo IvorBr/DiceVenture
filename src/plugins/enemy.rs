@@ -143,11 +143,12 @@ fn aggression_handler(
                 // Never attack, maybe just Idle
             }
             Aggression::RangeBased(range) => {
-                if let Some(player) = find_closest_in_range(&players, enemy_position, *range) {
-                    println!("Found player");
-                    *state = EnemyState::Attacking(player);
-                } else {
-                    *state = EnemyState::Idle;
+                if !matches!(*state, EnemyState::Attacking(_)) {
+                    if let Some(player) = find_closest_in_range(&players, enemy_position, *range) {
+                        *state = EnemyState::Attacking(player);
+                    } else {
+                        *state = EnemyState::Idle;
+                    }
                 }
             }
         }
