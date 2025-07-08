@@ -94,3 +94,39 @@ pub struct WindUp {
 pub struct StartAttack {
     pub attack: WindUp
 }
+
+#[derive(Component)]
+pub struct StandardMover;
+
+#[derive(Component, Clone, Copy)]
+pub struct MoveRule {
+    pub offsets   : &'static [IVec3],
+    pub can_climb : bool,
+    pub can_drop  : bool,
+    pub heuristic : fn(IVec3, IVec3) -> i32,
+}
+
+pub const STANDARD: [IVec3; 4] = [ IVec3::X, IVec3::new(-1,0,0), IVec3::Z, IVec3::new(0,0,-1) ];
+pub const KNIGHT: [IVec3; 8] = [
+    IVec3::new(2,0,1), IVec3::new(2,0,-1), IVec3::new(-2,0,1), IVec3::new(-2,0,-1),
+    IVec3::new(1,0,2), IVec3::new(1,0,-2), IVec3::new(-1,0,2), IVec3::new(-1,0,-2),
+];
+
+pub const fn h_manhattan(a: IVec3, b: IVec3) -> i32 {
+    (a.x - b.x).abs() + (a.y - b.y).abs() + (a.z - b.z).abs()
+}
+pub const fn h_knight(a: IVec3, b: IVec3) -> i32 {
+    (h_manhattan(a, b) + 2) / 3
+}
+
+pub const STANDARD_RULE: MoveRule = MoveRule {
+    offsets: &STANDARD,
+    can_climb: true,  can_drop: true,
+    heuristic: h_manhattan,
+};
+
+pub const KNIGHT_RULE: MoveRule = MoveRule {
+    offsets: &KNIGHT,
+    can_climb: false, can_drop: false,
+    heuristic: h_knight,
+};
