@@ -1,24 +1,23 @@
 use bevy::prelude::*;
 
 use crate::components::enemy::AttackPhase;
-use crate::components::enemy::EnemyState;
 use crate::components::enemy::StartAttack;
 use crate::components::enemy::WindUp;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::overworld::{LocalIsland, Island};
+use crate::plugins::enemy_aggression::AggressionPlugin;
 use crate::plugins::enemy_movement::MovementPlugin;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
+use crate::components::enemy::SnakePart;
 use crate::IslandSet;
-use crate::components::enemy::Aggression;
 
 pub struct EnemyPlugin;
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_plugins(MovementPlugin)
+        .add_plugins((MovementPlugin, AggressionPlugin))
         .replicate::<Enemy>()
         .replicate::<Shape>()
         .replicate::<SnakePart>()
@@ -27,7 +26,7 @@ impl Plugin for EnemyPlugin {
         )
         .add_systems(Update, ( 
             attack_clean_up,
-            (aggression_handler, attack_check).run_if(server_running)
+            (attack_check).run_if(server_running)
         )
         )
         .add_server_trigger::<StartAttack>(Channel::Unordered)
@@ -112,43 +111,6 @@ fn init_enemy(
                 )).id();
 
                 commands.entity(entity).add_child(child);
-            }
-        }
-    }
-}
-
-fn find_closest_in_range(players: &Query<(&Position, Entity), With<Player>>, enemy_pos: &Position, range: i32) -> Option<Entity> {
-    let mut closest_player: Option<Entity> = None;
-    let mut closest_distance: i32 = i32::MAX;
-
-    for (player_pos, player_entity) in players.iter() {
-        let distance = player_pos.0.distance_squared(enemy_pos.0);
-
-        if distance <= range * range && distance < closest_distance {
-            closest_player = Some(player_entity);
-            closest_distance = distance;
-        }
-    }
-    closest_player
-}
-
-fn aggression_handler(
-    mut enemies: Query<(&Position, &Aggression, &mut EnemyState)>,
-    players: Query<(&Position, Entity), With<Player>>,
-) {
-    for (enemy_position, aggression, mut state) in enemies.iter_mut() {
-        match aggression {
-            Aggression::Passive => {
-                // Never attack, maybe just Idle
-            }
-            Aggression::RangeBased(range) => {
-                if !matches!(*state, EnemyState::Attacking(_)) {
-                    if let Some(player) = find_closest_in_range(&players, enemy_position, *range) {
-                        *state = EnemyState::Attacking(player);
-                    } else {
-                        *state = EnemyState::Idle;
-                    }
-                }
             }
         }
     }

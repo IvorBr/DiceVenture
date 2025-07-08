@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
 use crate::components::humanoid::Position;
-use crate::components::enemy::{Enemy, EnemyState, MoveTimer, Aggression};
-use crate::components::island::{EleminationObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
+use crate::components::enemy::{Enemy, EnemyState, MoveTimer, STANDARD_MOVE, KNIGHT_MOVE, RangeAggro};
+use crate::components::island::{FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
 use crate::components::overworld::Island;
 use crate::preludes::network_preludes::*;
 
@@ -68,12 +68,12 @@ fn generate_island_server(
             let enemy_id = commands
                 .spawn((
                     Enemy,
+                    STANDARD_MOVE,
                     EnemyState::Idle,
                     Position(enemy_pos),
-                    EleminationObjective,
                     MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
                     OnIsland(island_id.0),
-                    Aggression::RangeBased(5)
+                    RangeAggro(5)
                 ))
                 .id();
 

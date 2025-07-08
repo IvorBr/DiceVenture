@@ -255,7 +255,6 @@ fn move_ocean(
             ocean_transform.translation.x = transform.translation.x;
             ocean_transform.translation.z = transform.translation.z;
         }
-
     }
 }
 

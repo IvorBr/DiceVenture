@@ -2,13 +2,13 @@ use bevy::prelude::*;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 
+use crate::components::enemy::MoveRule;
 use crate::components::enemy::EnemyState;
-use crate::components::enemy::WindUp;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::components::enemy::{PathfindNode, MoveTimer, SnakePart};
+use crate::components::enemy::{PathfindNode, MoveTimer};
 
 pub struct MovementPlugin;
 impl Plugin for MovementPlugin {
@@ -24,21 +24,14 @@ impl Plugin for MovementPlugin {
 
 fn standard_mover(
     time: Res<Time>,    
-    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
     mut islands: ResMut<IslandMaps>,
-){               
-    let directions : Vec<IVec3> = [
-        IVec3::new(1, 0, 0),
-        IVec3::new(-1, 0, 0),
-        IVec3::new(0, 0, 1),
-        IVec3::new(0, 0, -1),
-    ].to_vec();
-
-    for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state) in enemies.iter_mut() {
+) {
+    for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule) in enemies.iter_mut() {
         if let Some(map) = islands.maps.get_mut(&island.0) {
             if timer.0.tick(time.delta()).just_finished() {
-                
+            
                 let enemy_target = match enemy_state {
                     EnemyState::Attacking(target) => Some(players.get(*target).unwrap().0),
                     _ => None
@@ -46,8 +39,7 @@ fn standard_mover(
 
                 if let Some(target_pos) = enemy_target {
                     let closest_offset = enemy_pos.0;
-
-                    let path = astar(closest_offset, target_pos, &map, &directions);
+                    let path = astar(closest_offset, target_pos, &map, move_rule);
                     
                     if let Some(next_step) = path.get(1) {
                         map.remove_entity(enemy_pos.0);
@@ -60,14 +52,14 @@ fn standard_mover(
     }
 }
 
-fn astar(start: IVec3, goal: IVec3, map: &Map, directions: &Vec<IVec3>) -> Vec<IVec3> {
+fn astar(start: IVec3, goal: IVec3, map: &Map, move_rule: &MoveRule) -> Vec<IVec3> {
     let mut open_set = BinaryHeap::new();
     let mut open_set_hash = HashSet::new(); // Store the positions in the open set for faster checks
     let mut closed_set = HashSet::new();
     let mut came_from = HashMap::new();
     let mut scores = HashMap::new();
 
-    let start_heuristic = heuristic(start, goal);
+    let start_heuristic = (move_rule.heuristic)(start, goal);
     open_set.push(PathfindNode { pos: start, f_score: start_heuristic });
     open_set_hash.insert(start);
     scores.insert(start, (0, start_heuristic));
@@ -84,7 +76,7 @@ fn astar(start: IVec3, goal: IVec3, map: &Map, directions: &Vec<IVec3>) -> Vec<I
 
         let (current_g_score, _) = scores[&current];
 
-        for neighbor in get_valid_neighbors(current, map, &directions) {
+        for neighbor in get_valid_neighbors(current, map, move_rule.offsets) {
             if closed_set.contains(&neighbor) {
                 continue;
             }
@@ -94,7 +86,7 @@ fn astar(start: IVec3, goal: IVec3, map: &Map, directions: &Vec<IVec3>) -> Vec<I
 
             if tentative_g_score < *neighbor_g_score {
                 came_from.insert(neighbor, current);
-                let neighbor_f_score = tentative_g_score + heuristic(neighbor, goal);
+                let neighbor_f_score = tentative_g_score + (move_rule.heuristic)(neighbor, goal);
                 scores.insert(neighbor, (tentative_g_score, neighbor_f_score));
 
                 if !open_set_hash.contains(&neighbor) {
@@ -111,10 +103,6 @@ fn astar(start: IVec3, goal: IVec3, map: &Map, directions: &Vec<IVec3>) -> Vec<I
     Vec::new()
 }
 
-fn heuristic(a: IVec3, b: IVec3) -> i32 {
-    (a.x - b.x).abs() + (a.y - b.y).abs() + (a.z - b.z).abs()
-}
-
 fn reconstruct_path(came_from: HashMap<IVec3, IVec3>, mut current: IVec3) -> Vec<IVec3> {
     let mut total_path = vec![]; // TODO: Include the goal node?
     while let Some(&prev) = came_from.get(&current) {
@@ -125,7 +113,7 @@ fn reconstruct_path(came_from: HashMap<IVec3, IVec3>, mut current: IVec3) -> Vec
     total_path
 }
 
-fn get_valid_neighbors(position: IVec3, map: &Map, directions: &Vec<IVec3>) -> Vec<IVec3> {
+fn get_valid_neighbors(position: IVec3, map: &Map, directions: &'static [IVec3]) -> Vec<IVec3> {
     let mut neighbors = Vec::new();
 
     for &dir in directions.iter() {
