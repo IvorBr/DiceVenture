@@ -21,9 +21,9 @@ impl Plugin for EnemyPlugin {
         .replicate::<Shape>()
         .replicate::<SnakePart>()
         .add_systems(PreUpdate,
-            (init_enemy).in_set(IslandSet)
-        )
-        .add_systems(Update, (attack_check).run_if(server_running));
+            ((init_enemy).in_set(IslandSet),
+            (attack_check).run_if(server_running))
+        );
     }
 }
 
@@ -112,12 +112,16 @@ fn init_enemy(
 //TODO add system to easily add new attacks to enemies, probably at the enemy rules?
 fn attack_check(
     mut commands: Commands,
-    mut enemies: Query<(Entity, &Position, &mut AttackCooldowns, &Attacks), With<Enemy>>,
+    mut enemies: Query<(Entity, &Position, &mut AttackCooldowns, &Attacks, &ActionState), With<Enemy>>,
     players: Query<(Entity, &Position), With<Player>>,
     catalog: Res<AttackCatalogue>
 ) {
-    for (enemy_entity, enemy_pos, mut cooldowns, attacks) in &mut enemies {
+    for (enemy_entity, enemy_pos, mut cooldowns, attacks, action_state) in &mut enemies {
         // iterate over all attacks this enemy can use
+        if *action_state != ActionState::Idle {
+            continue;
+        }
+
         for id in &attacks.0 {
             if let Some(timer) = cooldowns.0.get_mut(&id) {
                 if !timer.finished() { 

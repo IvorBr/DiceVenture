@@ -44,7 +44,7 @@ fn movement_input(
         return;
     };
     
-    if *action_state != ActionState::Attacking {
+    if *action_state == ActionState::Attacking {
         return;
     }
 
