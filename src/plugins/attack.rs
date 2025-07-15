@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::attacks::base_attack::{BaseAttack, BaseAttackPlugin};
-use crate::components::enemy::STANDARD;
+use crate::attacks::base_attack::BaseAttackPlugin;
 use crate::components::humanoid::{AttackCooldowns, Health};
 use crate::components::island_maps::IslandMaps;
+use crate::components::player::LocalPlayer;
 use crate::preludes::network_preludes::*;
 use std::collections::HashMap;
 
@@ -73,6 +73,7 @@ impl Plugin for AttackPlugin {
         .add_observer((server_apply_attack))
         .add_observer(client_visualize_attack)
         .add_observer(damage_trigger)
+        .add_observer(attack_trigger)
         .add_systems(PreUpdate, tick_attack_cooldowns.run_if(server_running))
         .add_plugins(BaseAttackPlugin);
     }
@@ -141,4 +142,44 @@ fn damage_trigger(
             }
         }
     }
+}
+
+#[derive(Event)]
+pub struct AttackEvent {
+    entity: Entity,
+    attack_id: AttackId,
+    offset: IVec3,
+}
+
+impl AttackEvent {
+    pub fn new( entity: Entity, attack_id: AttackId, offset: IVec3) -> Self {
+        Self { entity, attack_id, offset }
+    }
+}
+
+fn attack_trigger(
+    attack_trigger: Trigger<AttackEvent>,
+    mut commands: Commands,
+    attack_reg: Res<AttackRegistry>,
+    attack_cat: Res<AttackCatalogue>,
+    mut cooldowns_query: Query<&mut AttackCooldowns, With<LocalPlayer>>
+) {
+    let cooldowns : &mut AttackCooldowns = &mut cooldowns_query.single_mut();
+    if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
+        if !timer.finished() { 
+            return; 
+        }
+    }
+
+    cooldowns.0.insert(attack_trigger.attack_id, Timer::from_seconds(attack_cat.0.get(&attack_trigger.attack_id).unwrap().cooldown, TimerMode::Once));
+
+    commands.client_trigger_targets(
+        ClientAttack {
+            attack_id: attack_trigger.attack_id,
+            offset: attack_trigger.offset
+        },
+        attack_trigger.entity
+    );
+
+    attack_reg.spawn(attack_trigger.attack_id, &mut commands, attack_trigger.entity, attack_trigger.offset);
 }

@@ -145,7 +145,9 @@ fn spawn_overworld(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     overworld_query: Query<&OverworldRoot>,
+    world_seed: Res<WorldSeed>
 ) {
+    println!("spawning {}", world_seed.0);
     if overworld_query.get_single().is_ok() {
         return;
     }
@@ -187,7 +189,7 @@ fn spawn_overworld(
         .observe(on_clicked_island)
         .set_parent(overworld_root);
 
-    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
     let positions = poisson_disk_sample_2d( //should end up basing this on a seed and chunk, since now we are only doing this in a small range
         Vec2::ZERO,
         5.0,     // min distance between islands
@@ -262,7 +264,7 @@ fn island_proximity(
     mut commands: Commands,
     mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
     ship_query: Query<&Transform, (With<Ship>, With<LocalPlayer>)>,
-    island_query: Query<(&Transform, &Island, Entity)>,
+    island_query: Query<(&Transform, &Island, Entity)>, //TODO: CURRENTLY DOES ALL ISLANDS!! SHOULD JUST BE THE CURRENT CHUNK
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<NextState<GameState>>,
     mut player_enter_event: EventWriter<EnteredIsland>

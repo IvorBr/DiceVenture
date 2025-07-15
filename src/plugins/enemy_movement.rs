@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::components::enemy::MoveRule;
 use crate::components::enemy::EnemyState;
+use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::preludes::network_preludes::*;
@@ -24,32 +25,42 @@ impl Plugin for MovementPlugin {
 
 fn standard_mover(
     time: Res<Time>,
-    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule), (With<Enemy>, Without<Player>)>,
+    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
     mut islands: ResMut<IslandMaps>,
 ) {
-    for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule) in enemies.iter_mut() {
-        if let Some(map) = islands.maps.get_mut(&island.0) {
-            if timer.0.tick(time.delta()).just_finished() {
-                let enemy_target = match enemy_state {
-                    EnemyState::Attacking(target) => Some(players.get(*target)),
-                    _ => None
-                };
+    for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule, action_state) in enemies.iter_mut() {
+        if timer.0.tick(time.delta()).just_finished() {
+            timer.1 = true;
+        }
 
-                if let Some(Ok(target_pos)) = enemy_target {
-                    let closest_offset = enemy_pos.0;
-                    let path = astar(closest_offset, target_pos.0, &map, move_rule);
+        if *action_state != ActionState::Idle || !timer.1 {
+            continue;
+        }
+
+        if let Some(map) = islands.maps.get_mut(&island.0) {
+            let enemy_target = match enemy_state {
+                EnemyState::Attacking(target) => Some(players.get(*target)),
+                _ => None,
+            };
+
+            if let Some(Ok(target_pos)) = enemy_target {
+                let closest_offset = enemy_pos.0;
+                let path = astar(closest_offset, target_pos.0, &map, move_rule);
+
+                if let Some(next_step) = path.get(1) {
+                    map.remove_entity(enemy_pos.0);
+                    enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
+                    map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
                     
-                    if let Some(next_step) = path.get(1) {
-                        map.remove_entity(enemy_pos.0);
-                        enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
-                        map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
-                    }
+                    timer.0.reset();
+                    timer.1 = false;
                 }
             }
         }
     }
 }
+
 
 fn astar(start: IVec3, goal: IVec3, map: &Map, move_rule: &MoveRule) -> Vec<IVec3> {
     let mut open_set = BinaryHeap::new();

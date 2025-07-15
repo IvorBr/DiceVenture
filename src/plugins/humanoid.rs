@@ -69,10 +69,6 @@ fn animate_movement(
     time: Res<Time>
 ) {
     for (position, mut transform, mut action_state) in &mut moved_entities {
-        if *action_state == ActionState::Attacking {
-            continue;
-        }
-
         let target = position.0.as_vec3();
         let current = transform.translation;
 

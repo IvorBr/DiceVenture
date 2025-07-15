@@ -4,10 +4,10 @@ use noise::Perlin;
 use rand::seq::IndexedRandom;
 use crate::attacks::base_attack::BaseAttack;
 use crate::components::humanoid::{AttackCooldowns, Position};
-use crate::components::enemy::{Attacks, Enemy, EnemyState, MoveTimer, RangeAggro, KNIGHT_MOVE, STANDARD, STANDARD_MOVE};
+use crate::components::enemy::{Attacks, Enemy, EnemyState, MoveTimer, RangeAggro, STANDARD_MOVE};
 use crate::components::island::{FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
 use crate::components::overworld::Island;
-use crate::plugins::attack::{key_of, AttackSpec};
+use crate::plugins::attack::key_of;
 use crate::preludes::network_preludes::*;
 
 use rand::rngs::StdRng;
@@ -75,7 +75,7 @@ fn generate_island_server(
                     AttackCooldowns::default(),
                     EnemyState::Idle,
                     Position(enemy_pos),
-                    MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating)),
+                    MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
                     OnIsland(island_id.0),
                     RangeAggro(5)
                 ))

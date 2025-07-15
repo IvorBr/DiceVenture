@@ -34,7 +34,7 @@ pub struct PassiveAggro;
 pub struct RangeAggro(pub i32);
 
 #[derive(Component)]
-pub struct MoveTimer(pub Timer);
+pub struct MoveTimer(pub Timer, pub bool);
 
 #[derive(Component, Serialize, Deserialize, Clone, Default)]
 pub struct Shape(pub Vec<IVec3>);

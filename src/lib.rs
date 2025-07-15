@@ -19,7 +19,8 @@ use plugins::island_controls::PlayerPlugin;
 
 use plugins::overworld::OverworldPlugin;
 use plugins::ship::ShipPlugin;
-
+use rand::Rng;
+use crate::components::overworld::WorldSeed;
 use crate::plugins::attack::AttackPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
@@ -47,6 +48,7 @@ impl Plugin for AppPlugin {
         }),
         ..default()
         }))
+        .insert_resource(WorldSeed(rand::rng().random()))
         .insert_state(GameState::Initializing)
         .configure_sets(Update, (
             IslandSet.run_if(in_state(GameState::Island)),

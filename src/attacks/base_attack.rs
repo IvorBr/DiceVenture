@@ -54,6 +54,7 @@ fn perform_attack(
     mut attacks: Query<(Entity, &Position, &mut Transform, &mut BaseAttack, &mut ActionState, &OnIsland)>,
 ) {
     for (entity, pos, mut transform, mut attack, mut state, island) in &mut attacks {
+        *state = ActionState::Attacking;
         attack.timer.tick(time.delta());
 
         let t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
@@ -64,7 +65,6 @@ fn perform_attack(
         };
         if !attack.hit && t >= 0.5 {
             attack.hit = true;
-            println!("HELLO");
             commands.trigger(DamageEvent::new(
                 island.0,
                 pos.0 + attack.direction,

@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use crate::attacks::base_attack::BaseAttack;
+use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::player::LocalPlayer;
 use crate::components::player::MovementCooldown;
 use crate::plugins::attack::key_of;
+use crate::plugins::attack::AttackEvent;
 use crate::plugins::attack::AttackRegistry;
 use crate::plugins::attack::ClientAttack;
 use crate::preludes::humanoid_preludes::*;
@@ -32,10 +34,19 @@ fn movement_input(
     mut move_events: EventWriter<MoveDirection>, 
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
+    player: Query<&ActionState, (With<LocalPlayer>, With<Player>)>,
     time: Res<Time>,
     mut cooldown: ResMut<MovementCooldown>,
 ) {
     cooldown.timer.tick(time.delta());
+
+    let Ok(action_state) = player.get_single() else {
+        return;
+    };
+    
+    if *action_state != ActionState::Attacking {
+        return;
+    }
 
     let mut direction = IVec3::ZERO;
     let mut just_pressed = false;
@@ -90,10 +101,17 @@ fn attack_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-    player: Query<Entity, (With<LocalPlayer>, With<Player>)>,
+    player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Player>)>,
     attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
+    let Ok((entity, action_state)) = player.get_single() else {
+        return;
+    };
+    
+    if *action_state != ActionState::Idle {
+        return;
+    }
 
     if input.just_pressed(KeyCode::ArrowUp) {
         direction.z -= 1;
@@ -119,18 +137,16 @@ fn attack_input(
     }
 
     if direction != IVec3::ZERO {
-        let base_attack_key = key_of::<BaseAttack>();
-        let entity = player.single();
-        
+        let attack_id = key_of::<BaseAttack>();
         commands.client_trigger_targets(
             ClientAttack {
-                attack_id: base_attack_key,
+                attack_id: attack_id,
                 offset: direction
             },
             entity
         );
 
-        attack_reg.spawn(base_attack_key, &mut commands, entity, direction);
+        attack_reg.spawn(attack_id, &mut commands, entity, direction);
     }
 }
 
@@ -183,7 +199,7 @@ fn apply_movement(
                 // Update the map after the logic
                 map.remove_entity(current_pos);
                 map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
-
+                
                 position.0 = new_position;
             }
         }

@@ -3,7 +3,7 @@ use bevy::winit::{UpdateMode::Continuous, WinitSettings};
 use serde::Deserialize;
 use serde::Serialize;
 use crate::components::island_maps::IslandMaps;
-use crate::components::overworld::Ship;
+use crate::components::overworld::{Ship, WorldSeed};
 use crate::components::player::LocalPlayer;
 use crate::preludes::network_preludes::*;
 use crate::GameState;
@@ -12,6 +12,7 @@ use clap::Parser;
 
 #[derive(Component, Clone, Copy, Serialize, Deserialize)]
 pub struct OwnedBy(pub Entity);
+
 
 pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
@@ -25,11 +26,12 @@ impl Plugin for NetworkPlugin {
         .init_resource::<Cli>()
         .insert_resource(IslandMaps::new())
         .add_server_trigger::<MakeLocal>(Channel::Ordered)
+        .add_server_trigger::<GameInfo>(Channel::Unordered)
         .add_observer(client_connected)
         .add_observer(client_disconnected)
         .add_observer(make_local)
+        .add_observer(game_info_trigger)
         .add_server_event::<MapUpdate>(Channel::Ordered)
-        .replicate::<OwnedBy>()
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
         );
@@ -97,6 +99,12 @@ impl Plugin for NetworkPlugin {
 
 #[derive(Event, Serialize, Deserialize)]
 pub struct MakeLocal;
+
+#[derive(Event, Serialize, Deserialize)]
+pub struct GameInfo{
+    seed: u64,
+}
+
 
 fn read_cli(
     mut commands: Commands,
@@ -190,11 +198,21 @@ fn read_cli(
                 TextColor::WHITE,
             ));
 
-            state.set(GameState::Overworld);
+            state.set(GameState::Initializing);
         }
     }
 
     Ok(())
+}
+
+fn game_info_trigger(
+    trigger: Trigger<GameInfo>,
+    mut commands: Commands,
+    mut state: ResMut<NextState<GameState>>
+) {
+    println!("received {}, too late probably", trigger.seed);
+    commands.insert_resource(WorldSeed(trigger.seed));
+    state.set(GameState::Overworld);
 }
 
 fn make_local(
@@ -206,7 +224,8 @@ fn make_local(
 
 fn client_connected(
     trigger: Trigger<OnAdd, ConnectedClient>, 
-    mut commands: Commands
+    mut commands: Commands,
+    world_seed: Res<WorldSeed>
 ) {
     info!("{:?} connected", trigger.entity());
 
@@ -219,6 +238,16 @@ fn client_connected(
         ToClients {
             mode: SendMode::Direct(trigger.entity()),
             event: MakeLocal,
+        },
+        boat_entity,
+    );
+
+    commands.server_trigger_targets(
+        ToClients {
+            mode: SendMode::Direct(trigger.entity()),
+            event: GameInfo {
+                seed: world_seed.0
+            },
         },
         boat_entity,
     );

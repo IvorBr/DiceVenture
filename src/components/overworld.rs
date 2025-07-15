@@ -36,3 +36,6 @@ pub struct ServerShipPosition{
     pub client_entity: Entity,
     pub position: Vec3
 }
+
+#[derive(Resource, Clone, Copy)]
+pub struct WorldSeed(pub u64);

@@ -8,9 +8,6 @@ edition = "2021"
 [features]
 dev = ["bevy/file_watcher", "bevy/dynamic_linking"]
 
-[alias]
-dev = "run --features dev"
-
 [dependencies]
 bevy = { version = "0.15.2" }
 bevy_replicon = "0.32.1"
