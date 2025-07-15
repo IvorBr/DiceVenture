@@ -187,7 +187,7 @@ fn spawn_overworld(
         .observe(on_clicked_island)
         .set_parent(overworld_root);
 
-    let mut rng = ChaCha8Rng::seed_from_u64(rand::random());
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
     let positions = poisson_disk_sample_2d( //should end up basing this on a seed and chunk, since now we are only doing this in a small range
         Vec2::ZERO,
         5.0,     // min distance between islands

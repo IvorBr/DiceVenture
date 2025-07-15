@@ -1,28 +1,29 @@
 use bevy::prelude::*;
-use crate::components::humanoid::ActionState;
-use crate::components::humanoid::AttackAnimation;
-use crate::components::humanoid::AttackDirection;
-use crate::components::humanoid::AttackLerp;
+use crate::attacks::base_attack::BaseAttack;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
+use crate::components::player::LocalPlayer;
 use crate::components::player::MovementCooldown;
+use crate::plugins::attack::key_of;
+use crate::plugins::attack::AttackRegistry;
+use crate::plugins::attack::ClientAttack;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};
 use crate::IslandSet;
-
 use super::network::OwnedBy;
 
 pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app
+        .add_client_event::<MoveDirection>(Channel::Ordered)
         .insert_resource(MovementCooldown {
             timer: Timer::from_seconds(0.2, TimerMode::Once),
         })
         .add_systems(Update, (
-            (apply_attack, apply_movement).run_if(server_running),
-            (movement_input, attack_input, animate_attack, update_attack_lerp).in_set(IslandSet)
+            (apply_movement).run_if(server_running),
+            (movement_input, attack_input).in_set(IslandSet)
         ));
     }
 }
@@ -86,9 +87,11 @@ fn movement_input(
 }
 
 fn attack_input(
-    mut attack_events: EventWriter<AttackDirection>,
+    mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
+    player: Query<Entity, (With<LocalPlayer>, With<Player>)>,
+    attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
 
@@ -116,7 +119,18 @@ fn attack_input(
     }
 
     if direction != IVec3::ZERO {
-        attack_events.send(AttackDirection(direction));
+        let base_attack_key = key_of::<BaseAttack>();
+        let entity = player.single();
+        
+        commands.client_trigger_targets(
+            ClientAttack {
+                attack_id: base_attack_key,
+                offset: direction
+            },
+            entity
+        );
+
+        attack_reg.spawn(base_attack_key, &mut commands, entity, direction);
     }
 }
 
@@ -176,90 +190,3 @@ fn apply_movement(
     }
 }
 
-fn apply_attack(
-    mut attack_events: EventReader<FromClient<AttackDirection>>,
-    mut attack_animation_events: EventWriter<ToClients<AttackAnimation>>,
-    players: Query<(&OwnedBy, &Position, &OnIsland), With<Player>>,
-    mut enemies: Query<&mut Health, With<Enemy>>,
-    islands: Res<IslandMaps>,
-) {
-    for FromClient { client_entity, event } in attack_events.read() {
-        for (owner, position, island) in &players {
-            if *client_entity != owner.0 {
-                continue;
-            }
-
-            let map = islands.get_map(island.0);
-
-            attack_animation_events.send(ToClients {
-                mode: SendMode::Broadcast,
-                event: AttackAnimation {
-                    client_entity: *client_entity,
-                    direction: event.0
-                }
-            });
-
-            let target_pos = position.0 + event.0;
-            match map.get_tile(target_pos).kind {
-                TileType::Enemy => {
-                    let tile = map.get_tile(target_pos);
-                    if let Ok(mut health) = enemies.get_mut(tile.entity) {
-                        println!("Enemy encountered with health: {}", health.get());
-                        health.damage(10);
-                        println!("Enemy health after damage: {}", health.get());
-                    }
-                }
-                _ => {
-                }
-            }
-        }
-    }
-}
-
-fn animate_attack(
-    mut commands: Commands,
-    mut attack_animation_events: EventReader<AttackAnimation>,
-    mut players: Query<(Entity, &OwnedBy, &mut ActionState), With<Player>>
-) {
-    for AttackAnimation { client_entity, direction } in attack_animation_events.read() {
-        for (entity, owner, mut action_state) in players.iter_mut() {
-            if *client_entity != owner.0 {
-                continue;
-            }
-            
-            *action_state = ActionState::Attacking;
-            commands.entity(entity).insert(AttackLerp {
-                direction: *direction,
-                timer: Timer::from_seconds(0.1, TimerMode::Once)
-            });
-        }
-    }
-}
-
-fn update_attack_lerp(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut query: Query<(Entity, &Position, &mut Transform, &mut AttackLerp, &mut ActionState)>,
-) {
-    for (entity, position, mut transform, mut lerp, mut action_state) in &mut query {
-        lerp.timer.tick(time.delta());
-
-        let t = lerp.timer.elapsed_secs() / lerp.timer.duration().as_secs_f32();
-        let t = t.clamp(0.0, 1.0);
-
-        let offset = if t < 0.5 {
-            lerp.direction.as_vec3() * (t * 5.0 * 0.2)
-        } else {
-            lerp.direction.as_vec3() * ((1.0 - t) * 5.0 * 0.2)
-        };
-
-        let base = position.0.as_vec3();
-        transform.translation = base + offset;
-
-        if lerp.timer.finished() {
-            transform.translation = base;
-            commands.entity(entity).remove::<AttackLerp>();
-            *action_state = ActionState::Idle;
-        }
-    }
-}

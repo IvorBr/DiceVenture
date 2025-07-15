@@ -21,11 +21,8 @@ impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins(AtollPlugin)
-        .add_client_event::<MoveDirection>(Channel::Ordered)
         .add_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)
-        .add_client_event::<AttackDirection>(Channel::Ordered)
-        .add_server_event::<AttackAnimation>(Channel::Unreliable)
         .replicate::<OnIsland>()
         .replicate::<Player>()
         .replicate::<Position>()
@@ -168,10 +165,10 @@ fn add_waiting_player(
             let mut spawn_pos = map.leave_position;
             spawn_pos.y += 2;
             while map.get_tile(spawn_pos).kind != TileType::Empty {
-                spawn_pos.y += 1;
+                spawn_pos.z += 1;
             }
 
-            commands.entity(entity).insert(Player).insert(Position(spawn_pos)).remove::<Waiting>();
+            commands.entity(entity).insert(Position(spawn_pos)).remove::<Waiting>();
 
             map.add_player(spawn_pos, entity);
         }
@@ -186,6 +183,7 @@ fn player_enters_island(
     for FromClient { client_entity, event } in island_enter_event.read() {
         let island_id = event.0;
         let player_entity = commands.spawn((
+            Player,
             OwnedBy(*client_entity),
             Waiting,
             OnIsland(island_id),

@@ -23,7 +23,7 @@ impl Plugin for MovementPlugin {
 }
 
 fn standard_mover(
-    time: Res<Time>,    
+    time: Res<Time>,
     mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule), (With<Enemy>, Without<Player>)>,
     players: Query<&Position, With<Player>>,
     mut islands: ResMut<IslandMaps>,
@@ -31,15 +31,14 @@ fn standard_mover(
     for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule) in enemies.iter_mut() {
         if let Some(map) = islands.maps.get_mut(&island.0) {
             if timer.0.tick(time.delta()).just_finished() {
-            
                 let enemy_target = match enemy_state {
-                    EnemyState::Attacking(target) => Some(players.get(*target).unwrap().0),
+                    EnemyState::Attacking(target) => Some(players.get(*target)),
                     _ => None
                 };
 
-                if let Some(target_pos) = enemy_target {
+                if let Some(Ok(target_pos)) = enemy_target {
                     let closest_offset = enemy_pos.0;
-                    let path = astar(closest_offset, target_pos, &map, move_rule);
+                    let path = astar(closest_offset, target_pos.0, &map, move_rule);
                     
                     if let Some(next_step) = path.get(1) {
                         map.remove_entity(enemy_pos.0);

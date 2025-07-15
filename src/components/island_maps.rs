@@ -162,17 +162,16 @@ impl Map {
 
     // Check if a tile is in the terrain or if it's empty (for movement)
     pub fn can_move(&self, position: IVec3) -> bool {
-    let below = position - IVec3::Y;
-    if !matches!(self.get_tile(below).kind, TileType::Terrain(_)) {
-        return false;
-    }
+        let below = position - IVec3::Y;
+        if !matches!(self.get_tile(below).kind, TileType::Terrain(_)) {
+            return false;
+        }
 
-    match self.get_tile(position).kind {
-        TileType::Empty | TileType::Player => true,
-        _ => false,
+        match self.get_tile(position).kind {
+            TileType::Empty | TileType::Player => true,
+            _ => false,
+        }
     }
-}
-
 
     // Get a tile at the world position
     pub fn get_tile(&self, position: IVec3) -> Tile {
@@ -180,6 +179,16 @@ impl Map {
             return chunk.get_tile(self.world_to_local_chunk_coords(position))
         }
         Tile::default()
+    }
+
+    pub fn get_target(&self, position: IVec3) -> Option<Entity> {
+        if let Some(chunk) = self.get_chunk(position) {
+            let tile = chunk.get_tile(self.world_to_local_chunk_coords(position));
+            if tile.kind == TileType::Enemy || tile.kind == TileType::Player {
+                return Some(tile.entity)
+            }
+        }
+        None
     }
 
     // Add an entity at the world position

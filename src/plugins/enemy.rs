@@ -1,16 +1,15 @@
 use bevy::prelude::*;
 
-use crate::components::enemy::AttackPhase;
-use crate::components::enemy::StartAttack;
-use crate::components::enemy::WindUp;
-use crate::components::humanoid::ActionState;
+use crate::components::humanoid::{ActionState, AttackCooldowns};
 use crate::components::island::OnIsland;
+use crate::components::island_maps::{self, IslandMaps};
 use crate::components::overworld::{LocalIsland, Island};
-use crate::plugins::enemy_aggression::AggressionPlugin;
+use crate::plugins::attack::{AttackCatalogue, AttackInfo, AttackRegistry, AttackSpec};
+use crate::plugins::enemy_behaviour::AggressionPlugin;
 use crate::plugins::enemy_movement::MovementPlugin;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
-use crate::components::enemy::SnakePart;
+use crate::components::enemy::{Attacks, SnakePart};
 use crate::IslandSet;
 
 pub struct EnemyPlugin;
@@ -22,15 +21,9 @@ impl Plugin for EnemyPlugin {
         .replicate::<Shape>()
         .replicate::<SnakePart>()
         .add_systems(PreUpdate,
-            (init_enemy, visual_windup_and_attack).in_set(IslandSet)
+            (init_enemy).in_set(IslandSet)
         )
-        .add_systems(Update, ( 
-            attack_clean_up,
-            (attack_check).run_if(server_running)
-        )
-        )
-        .add_server_trigger::<StartAttack>(Channel::Unordered)
-        .add_observer(client_add_attack);
+        .add_systems(Update, (attack_check).run_if(server_running));
     }
 }
 
@@ -116,129 +109,39 @@ fn init_enemy(
     }
 }
 
-fn client_add_attack(
-    trigger: Trigger<StartAttack>,
-    mut commands: Commands,
-){
-    commands.entity(trigger.entity()).insert(trigger.attack.clone());
-}
-
-fn attack_clean_up(
-    mut commands: Commands,
-    mut enemies: Query<(Entity, &mut WindUp)>,
-    time: Res<Time>,
-){
-    for (entity, mut windup) in enemies.iter_mut() {
-        if windup.timer.finished() {
-            if windup.phase == AttackPhase::Windup {
-                windup.phase = AttackPhase::Strike;
-                windup.timer = Timer::from_seconds(0.25, TimerMode::Once);
-            }
-            else {
-                commands.entity(entity).remove::<WindUp>();
-            }
-        }
-
-        windup.timer.tick(time.delta());
-    }
-}
-
-//check if enemy can attack
+//TODO add system to easily add new attacks to enemies, probably at the enemy rules?
 fn attack_check(
     mut commands: Commands,
-    enemies: Query<(Entity, &Position), (With<Enemy>, Without<Player>, Without<WindUp>)>,
-    players: Query<&Position, With<Player>>,
+    mut enemies: Query<(Entity, &Position, &mut AttackCooldowns, &Attacks), With<Enemy>>,
+    players: Query<(Entity, &Position), With<Player>>,
+    catalog: Res<AttackCatalogue>
 ) {
-    for (enemy_entity, enemy_pos) in enemies.iter() {
-        for player_pos in players.iter() {
-            let delta = player_pos.0 - enemy_pos.0;
+    for (enemy_entity, enemy_pos, mut cooldowns, attacks) in &mut enemies {
+        // iterate over all attacks this enemy can use
+        for id in &attacks.0 {
+            if let Some(timer) = cooldowns.0.get_mut(&id) {
+                if !timer.finished() { 
+                    continue; 
+                }
+            }
 
-            if delta.abs().x + delta.abs().y + delta.abs().z == 1 {
+            let spec = catalog.0.get(id).unwrap();
+
+            if let Some((_, target_pos)) = players.iter().find(|(_, pos)| spec.offsets.contains(&(pos.0 - enemy_pos.0))) {
+                let dir = target_pos.0 - enemy_pos.0;
+            
+                cooldowns.0.insert(*id, Timer::from_seconds(spec.cooldown, TimerMode::Once));
+
                 commands.server_trigger_targets(
                     ToClients {
-                        mode: SendMode::Broadcast,
-                        event: StartAttack {
-                            attack: WindUp {
-                                target_pos: player_pos.0,
-                                timer: Timer::from_seconds(0.5, TimerMode::Once),
-                                phase: AttackPhase::Windup
-                            }
-                        },
+                        mode  : SendMode::Broadcast,
+                        event : AttackInfo { attack_id: *id, offset: dir },
                     },
                     enemy_entity,
                 );
 
                 break;
             }
-        }
-    }
-}
-
-use std::f32::consts::PI;
-fn visual_windup_and_attack(
-    mut commands: Commands,
-    mut enemies: Query<(Entity, &WindUp, &Position, &mut Transform, &mut ActionState), With<Enemy>>,
-    players: Query<(Entity, &Position), With<Player>>,
-) {
-
-    for (entity, windup, enemy_pos, mut transform, mut action_state) in enemies.iter_mut() {
-        match *action_state {
-            ActionState::Idle => {
-                commands.entity(entity).insert(ActionState::Attacking);
-            }
-            ActionState::Moving => continue,
-            _ => {}
-        }
-
-        let direction = (windup.target_pos - enemy_pos.0).as_vec3().normalize_or_zero();
-        let base_pos = enemy_pos.0.as_vec3();
-        let forward_offset = direction * 0.4;
-
-        // Phase-based tilt angle
-        let angle = match windup.phase {
-            AttackPhase::Windup => {
-                let t = windup.timer.fraction();
-                -30.0_f32.to_radians() * t
-            }
-            AttackPhase::Strike => {
-                let t = windup.timer.fraction();
-                (-30.0 + 50.0 * (PI * t).sin()).to_radians()
-            }
-            _ => 0.0
-        };
-
-        // Step 1: Face the direction
-        let yaw = direction.x.atan2(direction.z); // +Z is forward
-        let facing = Quat::from_rotation_y(-yaw); // Rotate around Y to face
-
-        // Step 2: Tilt forward in local space
-        let tilt = Quat::from_rotation_x(angle);
-
-        // Step 3: Combine cleanly
-        transform.rotation = facing * tilt;
-
-        match windup.phase {
-            AttackPhase::Windup => {
-                transform.translation = base_pos;
-            }
-            AttackPhase::Strike => {
-                let t = windup.timer.fraction();
-                let eased = (PI * t).sin();
-                transform.translation = base_pos + forward_offset * eased;
-
-                if windup.timer.finished() {
-                    transform.translation = base_pos;
-                    transform.rotation = facing; // reset to facing direction
-
-                    for (_, player_pos) in players.iter() {
-                        if player_pos.0 == windup.target_pos {
-                            println!("Player hit!");
-                        }
-                    }
-                    *action_state = ActionState::Idle;
-                }
-            }
-            _ => continue
         }
     }
 }
