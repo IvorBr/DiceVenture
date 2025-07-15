@@ -1,28 +1,30 @@
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
+use std::collections::HashMap;
+use crate::plugins::attack::AttackId;
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct Health{
-    value : u128,
+    value : u64,
 }
 
 impl Health {
-    pub fn new(value: u128) -> Self {
+    pub fn new(value: u64) -> Self {
         Health { value }
     }
 
-    pub fn get(&self) -> u128 {
+    pub fn get(&self) -> u64 {
         self.value
     }
 
-    pub fn damage(&mut self, amount: u128) {
+    pub fn damage(&mut self, amount: u64) {
         self.value = self.value.saturating_sub(amount);
     }
 }
 
 impl Default for Health {
     fn default() -> Self {
-        Self { value : 100 }
+        Self { value : 30 }
     }
 }
 
@@ -31,9 +33,6 @@ pub struct Position(pub IVec3);
 
 #[derive(Debug, Default, Deserialize, Event, Serialize)]
 pub struct MoveDirection(pub IVec3);
-
-#[derive(Debug, Default, Deserialize, Event, Serialize)]
-pub struct AttackDirection(pub IVec3);
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct RemoveEntity;
@@ -50,16 +49,8 @@ pub enum ActionState {
 #[require(Position)]
 #[require(Health)]
 #[require(ActionState)]
+#[require(AttackCooldowns)]
 pub struct Humanoid;
 
-#[derive(Debug, Deserialize, Event, Serialize)]
-pub struct AttackAnimation {
-    pub client_entity: Entity,
-    pub direction: IVec3,
-}
-
-#[derive(Component)]
-pub struct AttackLerp {
-    pub direction: IVec3,
-    pub timer: Timer,
-}
+    #[derive(Component, Default)]
+    pub struct AttackCooldowns(pub HashMap<AttackId, Timer>);

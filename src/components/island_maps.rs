@@ -24,12 +24,20 @@ impl IslandMaps {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
+pub enum TerrainType {
+    Sand,
+    Rock,
+    Boardwalk,
+    TreeTrunk,
+    Leaves
+}
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum TileType {
     #[default]
     Empty,
-    Terrain,
+    Terrain(TerrainType),
     Player,
     Enemy,
 }
@@ -90,16 +98,16 @@ impl Chunk {
 
 pub struct Map {
     pub chunks: HashMap<IVec3, Chunk>,
-    pub active : bool,
-    pub player_count : u32
+    pub player_count : u32,
+    pub leave_position : IVec3
 }
 
 impl Map {
     pub fn new() -> Self {
         let chunks = HashMap::new();
-        let active = false;
         let player_count = 0;
-        Map { chunks, active, player_count }
+        let leave_position = IVec3::ZERO;
+        Map { chunks, player_count, leave_position }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
@@ -119,9 +127,20 @@ impl Map {
         )
     }
 
+    pub fn chunk_to_world_coords(&self, chunk_coords: IVec3, tile_index: usize) -> IVec3 {
+        let size = CHUNK_SIZE as usize;
+
+        let x = (tile_index % size) as i32;
+        let y = ((tile_index / size) % size) as i32;
+        let z = (tile_index / (size * size)) as i32;
+
+        chunk_coords * CHUNK_SIZE + IVec3::new(x, y, z)    
+    }
+
     pub fn reset(&mut self) {
         self.chunks.clear();
-        self.active = false;
+        self.player_count = 0;
+        self.leave_position = IVec3::ZERO;
     }
 
     // Get the chunk containing a given world position
@@ -143,14 +162,15 @@ impl Map {
 
     // Check if a tile is in the terrain or if it's empty (for movement)
     pub fn can_move(&self, position: IVec3) -> bool {
-        if self.get_tile(position - IVec3::new(0, 1, 0)).kind == TileType::Terrain {
-            return match self.get_tile(position).kind {
-                TileType::Empty => true,
-                TileType::Player => true,
-                _ => false,
-            };
+        let below = position - IVec3::Y;
+        if !matches!(self.get_tile(below).kind, TileType::Terrain(_)) {
+            return false;
         }
-        false
+
+        match self.get_tile(position).kind {
+            TileType::Empty | TileType::Player => true,
+            _ => false,
+        }
     }
 
     // Get a tile at the world position
@@ -159,6 +179,16 @@ impl Map {
             return chunk.get_tile(self.world_to_local_chunk_coords(position))
         }
         Tile::default()
+    }
+
+    pub fn get_target(&self, position: IVec3) -> Option<Entity> {
+        if let Some(chunk) = self.get_chunk(position) {
+            let tile = chunk.get_tile(self.world_to_local_chunk_coords(position));
+            if tile.kind == TileType::Enemy || tile.kind == TileType::Player {
+                return Some(tile.entity)
+            }
+        }
+        None
     }
 
     // Add an entity at the world position
@@ -186,7 +216,103 @@ impl Map {
         self.player_count += 1;
         self.add_entity_ivec3(position, Tile::new(TileType::Player, entity));
     }
-}
+
+    pub fn shore_tiles(&mut self) -> Vec<IVec3> {
+        let neighbors = [
+            IVec3::X,
+            -IVec3::X,
+            IVec3::Z,
+            -IVec3::Z,
+        ];
+        let mut chunk_entries: Vec<_> = self.chunks.iter().collect();
+        chunk_entries.sort_by_key(|(key, _)| (key.x, key.y, key.z));
+        let mut shore_tiles = Vec::new();
+
+        for (chunk_coords, chunk) in chunk_entries {
+            for (i, tile) in chunk.tiles.iter().enumerate() {
+                if tile.kind == TileType::Terrain(TerrainType::Sand) {
+                    let world_pos = self.chunk_to_world_coords(*chunk_coords, i);
+
+                    if world_pos.y != 0 {
+                        continue;
+                    }
+
+                    let is_shore = neighbors.iter().any(|&offset| {
+                        let neighbor = world_pos + offset;
+                        self.get_tile(neighbor).kind == TileType::Empty
+                    });
+
+                    if is_shore {
+                        shore_tiles.push(world_pos);
+                    }
+                }
+            }
+        }
+
+        shore_tiles
+    }
+
+    pub fn above_water_top_tiles(&self) -> Vec<IVec3> {
+        let mut chunk_entries: Vec<_> = self.chunks.iter().collect();
+        chunk_entries.sort_by_key(|(key, _)| (key.x, key.y, key.z));
+
+        let mut result: Vec<IVec3> = Vec::new();
+        for (chunk_coords, chunk) in chunk_entries {
+            for (i, tile) in chunk.tiles.iter().enumerate() {
+                if let TileType::Terrain(_) = tile.kind {
+                    let pos = self.chunk_to_world_coords(*chunk_coords, i);
+                    if pos.y < 0 {
+                        continue;
+                    }
+
+                    let key = (pos.x, pos.z);
+                    match result.iter_mut().find(|v| (v.x, v.z) == key) {
+                        Some(existing) => {
+                            if pos.y > existing.y {
+                                *existing = pos;
+                            }
+                        }
+                        None => {
+                            result.push(pos);
+                        }
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn check_fit_rect(
+        &self,
+        origin: IVec3,
+        direction: IVec3,
+        width: i32,
+        length: i32,
+    ) -> Option<Vec<IVec3>> {
+            let right = IVec3::new(-direction.z, 0, direction.x);
+            let mut positions = Vec::with_capacity((width * length) as usize);
+
+            for l in 0..length {
+                for w in 0..width {
+                    let pos = origin + direction * l + right * w;
+
+                    let tile = self.get_tile(pos).kind;
+                    let is_first_row = l == 0;
+
+                    let acceptable = is_first_row || tile == TileType::Empty;
+
+                    if !acceptable {
+                        return None;
+                    }
+
+                    positions.push(pos);
+                }
+            }
+
+            Some(positions)
+        }
+    }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum UpdateType {

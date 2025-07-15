@@ -178,5 +178,5 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
 
     let finalColor = mix(mixedColor2, vec3(0.5, 0.8, 0.9), fresnel);
 
-    return vec4<f32>(finalColor, 1.0);
+    return vec4<f32>(finalColor, 0.4);
 }

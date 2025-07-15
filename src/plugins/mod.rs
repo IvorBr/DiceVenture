@@ -6,3 +6,6 @@ pub mod humanoid;
 pub mod overworld;
 pub mod island;
 pub mod ship;
+pub mod enemy_movement;
+pub mod enemy_behaviour;
+pub mod attack;

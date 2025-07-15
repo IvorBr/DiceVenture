@@ -5,8 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+dev = ["bevy/file_watcher", "bevy/dynamic_linking"]
+
+[alias]
+dev = "run --features dev"
+
 [dependencies]
-bevy = { version = "0.15.2", features = ["dynamic_linking", "file_watcher"] }
+bevy = { version = "0.15.2" }
 bevy_replicon = "0.32.1"
 bevy_replicon_renet = "0.9.0"
 clap = { version = "4.5.24", features = ["derive"] }
@@ -14,6 +20,10 @@ dolly = "0.6.0"
 log = { version = "*", features = ["max_level_debug", "release_max_level_warn"] }
 serde = "1.0.209"
 mint = "0.5"
+noise = "0.9"
+rand = "0.9.0"
+rand_chacha = "0.9.0"
+twox-hash = "1.6"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

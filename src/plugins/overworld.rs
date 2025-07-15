@@ -1,10 +1,13 @@
 use bevy::prelude::*;
-use crate::components::island::EnteredIsland;
+use crate::components::island::{EnteredIsland, GenerateIsland, VisualizeIsland};
 use crate::components::player::LocalPlayer;
+use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget};
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct WaterMaterial {
@@ -47,6 +50,7 @@ impl Plugin for OverworldPlugin {
         .add_systems(
             Update,
             (
+                move_ocean,
                 island_proximity.run_if(in_state(GameState::Overworld)),
             )
         );
@@ -111,6 +115,30 @@ fn activate_overworld(
     }
 }
 
+fn poisson_disk_sample_2d(
+    center: Vec2,
+    radius: f32,
+    num_points: usize,
+    range: f32,
+    rng: &mut impl rand::Rng,
+) -> Vec<Vec2> {
+    let mut points = Vec::new();
+    points.push(Vec2 { x: 0.0, y: 0.0 });
+
+    while points.len() < num_points {
+        let candidate = Vec2::new(
+            rng.random_range(-range..range),
+            rng.random_range(-range..range),
+        );
+
+        if points.iter().all(|p : &Vec2| p.distance(candidate) >= radius) {
+            points.push(center + candidate);
+        }
+    }
+
+    points
+}
+
 fn spawn_overworld(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -118,7 +146,7 @@ fn spawn_overworld(
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     overworld_query: Query<&OverworldRoot>,
 ) {
-    if let Ok(_) = overworld_query.get_single() {
+    if overworld_query.get_single().is_ok() {
         return;
     }
 
@@ -126,52 +154,71 @@ fn spawn_overworld(
         .spawn((
             OverworldRoot,
             Transform::from_xyz(0.0, 0.0, 0.0),
-            Visibility::Visible
-        )).id();
+            Visibility::Visible,
+        ))
+        .id();
 
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))),
-        MeshMaterial3d(water_materials.add(WaterMaterial {
-            ..Default::default()
-        })),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        Ocean
-    ))
-    .observe(on_clicked_ocean);
+    // ocean
+    commands
+        .spawn((
+            Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))),
+            MeshMaterial3d(water_materials.add(WaterMaterial {
+                ..Default::default()
+            })),
+            Transform::from_xyz(0.0, 0.3, 0.0),
+            Ocean,
+        ))
+        .observe(on_clicked_ocean);
 
-    // main island
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb_u8(100, 255, 100),
-            ..Default::default()
-        })),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        StarterIsland,
-        Island(0),
-        Visibility::Inherited
-    )).observe(on_clicked_island)
-    .set_parent(overworld_root);
-
-    // few smaller islands around the center.
-    let island_positions = [
-        Vec3::new(10.0, 0.0, 10.0),
-        Vec3::new(-10.0, 0.0, 10.0),
-        Vec3::new(10.0, 0.0, -10.0),
-        Vec3::new(-10.0, 0.0, -10.0),
-    ];
-
-    for (i, &pos) in island_positions.iter().enumerate() {
-        commands.spawn((
+    // starter island
+    commands
+        .spawn((
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::srgb_u8(100, 255, 100),
                 ..Default::default()
             })),
-            Transform::from_translation(pos),
+            Transform::from_xyz(0.0, 0.2, 0.0),
+            StarterIsland,
+            Island(0),
             Visibility::Inherited,
-            Island(i as u64)
-        )).observe(on_clicked_island)
+            Atoll
+        ))
+        .observe(on_clicked_island)
+        .set_parent(overworld_root);
+
+    let mut rng = ChaCha8Rng::seed_from_u64(0);
+    let positions = poisson_disk_sample_2d( //should end up basing this on a seed and chunk, since now we are only doing this in a small range
+        Vec2::ZERO,
+        5.0,     // min distance between islands
+        20,      // number of islands
+        30.0,    // spread range
+        &mut rng,
+    );
+
+    for (i, pos) in positions.into_iter().enumerate() {
+        let (island_type, base_color) = if rng.random_bool(0.5) {
+            (Atoll,
+            Color::srgb(0.9, 0.8, 0.6))
+        } else {
+            (Atoll,
+            Color::srgb(0.0, 0.4, 0.0))
+        };
+        
+        // Spawn the island entity
+        commands
+        .spawn((
+            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color,
+                ..Default::default()
+            })),
+            Transform::from_xyz(pos.x, 0.2, pos.y),
+            Visibility::Inherited, 
+            Island((i + 1) as u64),
+            Atoll
+        ))
+        .observe(on_clicked_island)
         .set_parent(overworld_root);
     }
 }
@@ -199,6 +246,18 @@ fn island_proximity_check(
     Some((best_island, best_distance, best_island_enitity))
 }
 
+fn move_ocean(
+    mut ocean: Query<&mut Transform, With<Ocean>>,
+    target: Query<&Transform, (With<CameraTarget>, Without<Ocean>)>
+){
+    if let Ok(transform) = target.get_single() {
+        for mut ocean_transform in &mut ocean {
+            ocean_transform.translation.x = transform.translation.x;
+            ocean_transform.translation.z = transform.translation.z;
+        }
+    }
+}
+
 fn island_proximity(
     mut commands: Commands,
     mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
@@ -218,9 +277,10 @@ fn island_proximity(
                 *proximity_ui_visibility = Visibility::Inherited;
 
                 if keyboard_input.pressed(KeyCode::KeyF) {
-                    state.set(GameState::Island);
+                    commands.entity(island_entity).insert(LocalIsland).insert(GenerateIsland).insert(VisualizeIsland);
+                    println!("Adding generate");
                     player_enter_event.send(EnteredIsland(island_id));
-                    commands.entity(island_entity).insert(LocalIsland);
+                    state.set(GameState::Island);
                 }
             } else {
                 *proximity_ui_visibility = Visibility::Hidden;

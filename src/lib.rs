@@ -3,6 +3,8 @@ use bevy::prelude::*;
 pub mod components;
 pub mod preludes;
 pub mod plugins;
+pub mod islands;
+pub mod attacks;
 
 use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
@@ -17,6 +19,8 @@ use plugins::island_controls::PlayerPlugin;
 
 use plugins::overworld::OverworldPlugin;
 use plugins::ship::ShipPlugin;
+
+use crate::plugins::attack::AttackPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
 enum GameState {
@@ -56,6 +60,7 @@ impl Plugin for AppPlugin {
         .add_plugins((
             NetworkPlugin,
             CameraPlugin,
+            AttackPlugin,
             
             OverworldPlugin,
             ShipPlugin,

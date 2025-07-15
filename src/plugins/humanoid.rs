@@ -3,9 +3,11 @@ use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::enemy::SnakePart;
 use crate::components::island::OnIsland;
+use crate::components::player::LocalPlayer;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::components::island_maps::IslandMaps;
+use crate::GameState;
 use crate::IslandSet;
 
 pub struct HumanoidPlugin;
@@ -46,14 +48,19 @@ fn death_check(
     }
 }
 
-fn remove_entities(mut commands: Commands,
-    entities: Query<(Entity, &Position, &OnIsland), With<RemoveEntity>>,
+fn remove_entities(
+    mut commands: Commands,
+    entities: Query<(Entity, &Position, &OnIsland, Option<&LocalPlayer>), With<RemoveEntity>>,
     mut islands: ResMut<IslandMaps>,
+    mut state: ResMut<NextState<GameState>>
 ) {
-    for (entity, position, island) in entities.iter() {
+    for (entity, position, island, local_player) in entities.iter() {
         islands.get_map_mut(island.0).remove_entity(position.0);
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn_recursive();
+        if local_player.is_some() {
+            state.set(GameState::Overworld);
+        }
     }
 }
 
