@@ -3,8 +3,8 @@ use crate::attacks::base_attack::BaseAttack;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
-use crate::components::player::LocalPlayer;
-use crate::components::player::MovementCooldown;
+use crate::components::character::LocalPlayer;
+use crate::components::character::MovementCooldown;
 use crate::plugins::attack::key_of;
 use crate::plugins::attack::AttackEvent;
 use crate::plugins::attack::AttackRegistry;
@@ -15,8 +15,8 @@ use crate::plugins::camera::{DollyCamera, PlayerCamera};
 use crate::IslandSet;
 use super::network::OwnedBy;
 
-pub struct PlayerPlugin;
-impl Plugin for PlayerPlugin {
+pub struct CharacterPlugin;
+impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_client_event::<MoveDirection>(Channel::Ordered)
@@ -34,7 +34,7 @@ fn movement_input(
     mut move_events: EventWriter<MoveDirection>, 
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-    player: Query<&ActionState, (With<LocalPlayer>, With<Player>)>,
+    player: Query<&ActionState, (With<LocalPlayer>, With<Character>)>,
     time: Res<Time>,
     mut cooldown: ResMut<MovementCooldown>,
 ) {
@@ -101,7 +101,7 @@ fn attack_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-    player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Player>)>,
+    player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Character>)>,
     attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
@@ -152,55 +152,55 @@ fn attack_input(
 
 fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut players: Query<(&OwnedBy, &mut Position, Entity, &OnIsland), With<Player>>,
+    mut players: Query<(&OwnedBy, &mut Position, Entity, &OnIsland), With<Character>>,
     mut islands: ResMut<IslandMaps>,
 ) {
     for FromClient { client_entity, event } in move_events.read() {
         for (owner, mut position, player_entity, island) in &mut players {
-            let map = islands.get_map_mut(island.0);
+            if let Some(map) = islands.get_map_mut(island.0) {
+                if *client_entity == owner.0 {
+                    let mut new_position = event.0;
+                    let current_pos = position.0.clone();
+                    new_position.x += current_pos.x;
+                    new_position.y += current_pos.y;
+                    new_position.z += current_pos.z;
+                    
+                    match map.get_tile(new_position).kind {
+                        TileType::Terrain(_) => {
+                            new_position.y += 1;
+                            let tile_above = map.get_tile(new_position);
 
-            if *client_entity == owner.0 {
-                let mut new_position = event.0;
-                let current_pos = position.0.clone();
-                new_position.x += current_pos.x;
-                new_position.y += current_pos.y;
-                new_position.z += current_pos.z;
-                
-                match map.get_tile(new_position).kind {
-                    TileType::Terrain(_) => {
-                        new_position.y += 1;
-                        let tile_above = map.get_tile(new_position);
+                            if tile_above.kind != TileType::Empty {
+                                return;
+                            }
+                        }
+                        TileType::Empty => {
+                            if new_position.y != 0 {
+                                let mut temp_pos = new_position;
+                                temp_pos.y -= 1;
+                                let tile_below = map.get_tile(temp_pos);
 
-                        if tile_above.kind != TileType::Empty {
+                                if tile_below.kind == TileType::Empty {
+                                    temp_pos.y -= 1;
+                                    let tile_below_terrain = map.get_tile(temp_pos);
+                                    if !matches!(tile_below_terrain.kind, TileType::Terrain(_)) {
+                                        return;
+                                    }
+                                    new_position.y -= 1;
+                                }
+                            }
+                        }
+                        _ => {
                             return;
                         }
                     }
-                    TileType::Empty => {
-                        if new_position.y != 0 {
-                            let mut temp_pos = new_position;
-                            temp_pos.y -= 1;
-                            let tile_below = map.get_tile(temp_pos);
-
-                            if tile_below.kind == TileType::Empty {
-                                temp_pos.y -= 1;
-                                let tile_below_terrain = map.get_tile(temp_pos);
-                                if !matches!(tile_below_terrain.kind, TileType::Terrain(_)) {
-                                    return;
-                                }
-                                new_position.y -= 1;
-                            }
-                        }
-                    }
-                    _ => {
-                        return;
-                    }
+                    
+                    // Update the map after the logic
+                    map.remove_entity(current_pos);
+                    map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
+                    
+                    position.0 = new_position;
                 }
-                
-                // Update the map after the logic
-                map.remove_entity(current_pos);
-                map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
-                
-                position.0 = new_position;
             }
         }
     }

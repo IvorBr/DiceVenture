@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_replicon::prelude::{AppRuleExt, Channel, ClientTriggerAppExt, ClientTriggerExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
-use crate::components::player::LocalPlayer;
+use crate::components::character::LocalPlayer;
 use crate::OverworldSet;
 use crate::components::overworld::*;
 use crate::plugins::camera::NewCameraTarget;
@@ -89,7 +89,7 @@ fn client_ship_move_update(
     trigger: Trigger<ServerShipPosition>,
     mut ships: Query<&mut Transform, With<Ship>>,
 ){
-    if let Ok(mut transform) = ships.get_mut(trigger.entity()) {
+    if let Ok(mut transform) = ships.get_mut(trigger.target()) {
         transform.translation = trigger.position;
     }
 }
@@ -105,6 +105,6 @@ fn server_ship_move_update(
                 position: trigger.0,
             }
         },
-        trigger.entity()
+        trigger.target()
     ); 
 }

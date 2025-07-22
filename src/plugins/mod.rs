@@ -9,3 +9,5 @@ pub mod ship;
 pub mod enemy_movement;
 pub mod enemy_behaviour;
 pub mod attack;
+pub mod player;
+pub mod damage_numbers;

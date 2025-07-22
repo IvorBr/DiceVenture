@@ -25,8 +25,8 @@ impl Plugin for MovementPlugin {
 
 fn standard_mover(
     time: Res<Time>,
-    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Player>)>,
-    players: Query<&Position, With<Player>>,
+    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Character>)>,
+    players: Query<&Position, With<Character>>,
     mut islands: ResMut<IslandMaps>,
 ) {
     for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule, action_state) in enemies.iter_mut() {

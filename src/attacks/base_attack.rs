@@ -38,11 +38,13 @@ fn register_base_attack(
     mut catalog: ResMut<AttackCatalogue>,
 ) {
     registry.register::<BaseAttack>(|commands, entity, offset| {
-        commands.entity(entity).insert(BaseAttack {
-            direction: offset,
-            timer: Timer::from_seconds(0.20, TimerMode::Once),
-            hit: false
-        });
+        if let Ok(mut ec) = commands.get_entity(entity) {
+            ec.insert(BaseAttack {
+                direction: offset,
+                timer: Timer::from_seconds(0.20, TimerMode::Once),
+                hit: false,
+            });
+        } 
     });
     let key = key_of::<BaseAttack>();
     catalog.0.insert(key, AttackSpec {offsets: &STANDARD, cooldown: 0.8, damage: DAMAGE });

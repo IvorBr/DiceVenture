@@ -36,3 +36,12 @@ pub struct FinishedSetupIsland;
 
 #[derive(Component)]
 pub struct Waiting;
+
+#[derive(Component)]
+pub struct EliminationObjective;
+
+#[derive(Component)]
+pub struct CompletedIslandObjective;
+
+#[derive(Component)]
+pub struct Chest;

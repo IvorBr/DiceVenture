@@ -15,13 +15,15 @@ use plugins::camera::CameraPlugin;
 
 use plugins::humanoid::HumanoidPlugin;
 use plugins::enemy::EnemyPlugin;
-use plugins::island_controls::PlayerPlugin;
+use plugins::island_controls::CharacterPlugin;
 
 use plugins::overworld::OverworldPlugin;
 use plugins::ship::ShipPlugin;
 use rand::Rng;
 use crate::components::overworld::WorldSeed;
 use crate::plugins::attack::AttackPlugin;
+use crate::plugins::damage_numbers::DamageNumbersPlugin;
+use crate::plugins::player::PlayerPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
 enum GameState {
@@ -61,16 +63,19 @@ impl Plugin for AppPlugin {
         ))
         .add_plugins((
             NetworkPlugin,
-            CameraPlugin,
-            AttackPlugin,
+            PlayerPlugin,
             
             OverworldPlugin,
             ShipPlugin,
 
             IslandPlugin,
-            PlayerPlugin,
+            CharacterPlugin,
             EnemyPlugin,    
             HumanoidPlugin,
+
+            CameraPlugin,
+            DamageNumbersPlugin,
+            AttackPlugin,
         ));
     }
 }

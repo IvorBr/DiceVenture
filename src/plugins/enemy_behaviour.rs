@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::{enemy::{EnemyState, PassiveAggro, RangeAggro}, humanoid::Position, player::Player};
+use crate::components::{character::Character, enemy::{EnemyState, PassiveAggro, RangeAggro}, humanoid::Position};
 pub struct AggressionPlugin;
 
 impl Plugin for AggressionPlugin {
@@ -11,7 +11,7 @@ impl Plugin for AggressionPlugin {
     }
 }
 
-fn find_closest_in_range(players: &Query<(&Position, Entity), With<Player>>, enemy_pos: &Position, range: i32) -> Option<Entity> {
+fn find_closest_in_range(players: &Query<(&Position, Entity), With<Character>>, enemy_pos: &Position, range: i32) -> Option<Entity> {
     let mut closest_player: Option<Entity> = None;
     let mut closest_distance: i32 = i32::MAX;
 
@@ -32,14 +32,23 @@ fn passive_aggro_system(mut enemies: Query<&mut EnemyState, With<PassiveAggro>>)
 
 fn range_aggro_system(
     mut enemies: Query<(&Position, &RangeAggro, &mut EnemyState)>,
-    players: Query<(&Position, Entity), With<Player>>,
+    players: Query<(&Position, Entity), With<Character>>,
+    mut commands: Commands
 ) {
     for (enemy_pos, aggro, mut state) in enemies.iter_mut() {
+
         if !matches!(*state, EnemyState::Attacking(_)) {
             if let Some(player) = find_closest_in_range(&players, enemy_pos, aggro.0) {
                 *state = EnemyState::Attacking(player);
             } else {
                 *state = EnemyState::Idle;
+            }
+        }
+        else {
+            if let EnemyState::Attacking(target) = *state {
+                if commands.get_entity(target).is_ok() {
+                    *state = EnemyState::Idle;
+                }
             }
         }
     }

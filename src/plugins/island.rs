@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use rand::seq::IndexedRandom;
 
 use crate::components::enemy::*;
 use crate::components::humanoid::*;
@@ -8,9 +9,9 @@ use crate::components::island_maps::TerrainType;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
 use crate::plugins::network::MakeLocal;
-use crate::components::player::LocalPlayer;
+use crate::components::character::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
-use crate::components::player::Player;
+use crate::components::character::Character;
 use crate::plugins::network::OwnedBy;
 use crate::preludes::network_preludes::*;
 use crate::IslandSet;
@@ -24,12 +25,12 @@ impl Plugin for IslandPlugin {
         .add_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)
         .replicate::<OnIsland>()
-        .replicate::<Player>()
+        .replicate::<Character>()
         .replicate::<Position>()
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
         .add_systems(Update, (
-            (player_enters_island, player_leaves_island, detect_objective).run_if(server_running),
+            (player_enters_island, player_leaves_island, elimination_island_objective).run_if(server_running),
             (spawn_island_player, client_player_leaves_island).in_set(IslandSet)
         ));
     }
@@ -37,7 +38,7 @@ impl Plugin for IslandPlugin {
 
 fn client_island_cleanup(
     mut commands: Commands,
-    player_query: Query<Entity, With<Player>>,
+    player_query: Query<Entity, With<Character>>,
     enemy_query: Query<Entity, With<Enemy>>,
     islandroot_query: Query<Entity, With<IslandRoot>>
 ) {
@@ -61,12 +62,14 @@ fn spawn_island_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
-    players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Player>, Without<Transform>)>,
-    local_island: Query<&Island, With<LocalIsland>>,
+    players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
+    local_island_query: Query<&Island, With<LocalIsland>>,
 ) {
     for (entity, position, local, island) in players.iter() {
-        if island.0 != local_island.single().0 {
-            continue;
+        if let Ok(local_island) = local_island_query.single() {
+            if island.0 != local_island.0 {
+                continue;
+            }
         }
 
         commands.entity(entity).insert((
@@ -183,7 +186,8 @@ fn player_enters_island(
     for FromClient { client_entity, event } in island_enter_event.read() {
         let island_id = event.0;
         let player_entity = commands.spawn((
-            Player,
+            Character,
+            Health::new(200),
             OwnedBy(*client_entity),
             Waiting,
             OnIsland(island_id),
@@ -206,11 +210,40 @@ fn player_enters_island(
     }
 }
 
-fn detect_objective(
-    target_query: Query<&EleminationObjective>
+fn elimination_island_objective(
+    mut commands: Commands,
+    target_query: Query<(Entity, &Island), (With<FinishedSetupIsland>, With<EliminationObjective>, Without<CompletedIslandObjective>)>,
+    mut island_maps: ResMut<IslandMaps>,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    islandroot_query: Query<Entity, With<IslandRoot>>
 ) {
-    if target_query.is_empty() {
-       // reward player
+    for (entity, island) in target_query.iter() {
+        if let Some(map) = island_maps.get_map_mut(island.0) {
+            if map.enemy_count == 0 {
+                if let Ok(island_root) = islandroot_query.get_single() {
+                    let top_tiles = map.above_water_top_tiles();
+                    let chest_pos = top_tiles.choose(&mut rand::rng()).unwrap().clone() + IVec3::Y;
+
+                    println!("{} spawning chest", chest_pos);
+                    let chest_entity = commands.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
+                        MeshMaterial3d(materials.add(StandardMaterial {
+                            base_color: Color::srgb(1.0, 1.0, 1.0),
+                            ..Default::default()
+                        })),
+                        Transform::from_xyz(chest_pos.x as f32, chest_pos.y as f32, chest_pos.z as f32),
+                        Position(chest_pos),
+                        Chest,
+                        Health::new(30),
+                        OnIsland(island.0),
+                    )).set_parent(island_root).id();
+
+                    map.add_entity_ivec3(chest_pos, Tile::new(TileType::Enemy, chest_entity));
+                    commands.entity(entity).insert(CompletedIslandObjective);
+                }
+            }
+        }
     }
 }
 
@@ -231,20 +264,20 @@ fn client_player_leaves_island(
 
 fn player_leaves_island(
     mut commands: Commands,
-    player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Player>>,
+    player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Character>>,
     mut islands: ResMut<IslandMaps>,
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
     for (position, entity, owner, island) in &player_query {
-        let map = islands.get_map_mut(island.0);
+        if let Some(map) = islands.get_map_mut(island.0) {
+            if position.0 == map.leave_position + IVec3::Y {
+                println!("{:?} leaves island", entity);
 
-        if position.0 == map.leave_position + IVec3::Y {
-            println!("{:?} leaves island", entity);
-
-            commands.entity(entity).try_despawn_recursive();
-            map.remove_entity(position.0);
-            map.player_count -= 1;
-            leave_island_event.send(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });    
+                commands.entity(entity).despawn();
+                map.remove_entity(position.0);
+                map.player_count -= 1;
+                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });    
+            }
         }
     }
 }

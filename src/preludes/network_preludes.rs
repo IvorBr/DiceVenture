@@ -1,12 +1,12 @@
 pub use bevy_replicon::prelude::*;
 pub use std::collections::HashSet;
 
-pub use bevy_replicon_renet::{
+pub use bevy_replicon_renet2::{
     netcode::{
-        ClientAuthentication, NetcodeClientTransport, NetcodeServerTransport,
+        ClientAuthentication, NetcodeClientTransport, NativeSocket, NetcodeServerTransport,
             ServerAuthentication, ServerConfig,
     },
-    renet::{
+    renet2::{
         ConnectionConfig, RenetClient, RenetServer,
     },
     RenetChannelsExt, RepliconRenetPlugins,

@@ -35,7 +35,7 @@ impl DollyCamera {
                 .with(Position::new(Point3 {x: 0.0, y: 0.0, z: 0.0}))
                 .with(yaw)
                 .with(Smooth::new_rotation(1.0))
-                .with(Arm::new(Point3 {x: 0.0, y: 0.0, z: 15.0}))
+                .with(Arm::new(Point3 {x: 0.0, y: 0.0, z: 18.0}))
                 .build(),
             direction: 0
         }
@@ -55,7 +55,7 @@ impl Plugin for CameraPlugin {
 fn camera_setup(
     mut commands: Commands
 ) {
-    let transform = Transform::from_xyz(0.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
+    let transform = Transform::from_xyz(0.0, 12.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
     let rotation = transform.rotation;
 
     commands.spawn((
@@ -72,6 +72,7 @@ fn camera_setup(
             color: Color::srgb(1.0, 0.95, 0.9),
             illuminance: 2500.0,
             shadows_enabled: true,
+            affects_lightmapped_mesh_diffuse: false, // TODO: Need to test what this effects
             shadow_depth_bias: DirectionalLight::DEFAULT_SHADOW_DEPTH_BIAS,
             shadow_normal_bias: DirectionalLight::DEFAULT_SHADOW_NORMAL_BIAS,
         },

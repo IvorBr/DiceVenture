@@ -5,7 +5,7 @@ use rand::seq::IndexedRandom;
 use crate::attacks::base_attack::BaseAttack;
 use crate::components::humanoid::{AttackCooldowns, Position};
 use crate::components::enemy::{Attacks, Enemy, EnemyState, MoveTimer, RangeAggro, STANDARD_MOVE};
-use crate::components::island::{FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
+use crate::components::island::{CompletedIslandObjective, EliminationObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
 use crate::components::overworld::Island;
 use crate::plugins::attack::key_of;
 use crate::preludes::network_preludes::*;
@@ -27,8 +27,8 @@ impl Plugin for AtollPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Update, // setup island tiles
-            (generate_island_map.before(generate_island_server), 
-            generate_island_server.run_if(server_running))
+            (generate_island_map.before(setup_island_server), 
+            setup_island_server.run_if(server_running))
         );
     }
 }
@@ -55,33 +55,39 @@ fn generate_island_map(
     }
 }
 
-fn generate_island_server(
+fn setup_island_server(
     mut commands: Commands,
     mut island_maps: ResMut<IslandMaps>,
-    islands: Query<(Entity, &Island), (With<Atoll>, With<MapFinishedIsland>)>,
+    islands: Query<(Entity, &Island, Option<&CompletedIslandObjective>), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
-    for (entity, island_id) in islands.iter() {
-        let map = island_maps.maps.get_mut(&island_id.0).unwrap();
-        let mut generator = StdRng::seed_from_u64(island_id.0);
-        
-        let top_tiles = map.above_water_top_tiles();
-        for _ in 0..5 {
-            let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
-            let enemy_id = commands
-                .spawn((
-                    Enemy,
-                    STANDARD_MOVE,
-                    Attacks(vec![key_of::<BaseAttack>()]),
-                    AttackCooldowns::default(),
-                    EnemyState::Idle,
-                    Position(enemy_pos),
-                    MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
-                    OnIsland(island_id.0),
-                    RangeAggro(5)
-                ))
-                .id();
+    for (entity, island_id, island_obj) in islands.iter() {
 
-            map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+        if island_obj.is_none() {
+            let map = island_maps.maps.get_mut(&island_id.0).unwrap();
+            let mut generator = StdRng::seed_from_u64(island_id.0);
+            
+            let top_tiles = map.above_water_top_tiles();
+            for _ in 0..5 {
+                let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
+                let enemy_id = commands
+                    .spawn((
+                        Enemy,
+                        STANDARD_MOVE,
+                        Attacks(vec![key_of::<BaseAttack>()]),
+                        AttackCooldowns::default(),
+                        EnemyState::Idle,
+                        Position(enemy_pos),
+                        MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
+                        OnIsland(island_id.0),
+                        RangeAggro(8)
+                    ))
+                    .id();
+
+                map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+                map.enemy_count += 1;
+
+                commands.entity(entity).insert(EliminationObjective);
+            }
         }
 
         commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();

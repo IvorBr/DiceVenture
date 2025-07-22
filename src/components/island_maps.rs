@@ -15,12 +15,12 @@ impl IslandMaps {
         IslandMaps { maps: HashMap::new() }
     }
 
-    pub fn get_map_mut(&mut self, id: u64) -> &mut Map {
-        self.maps.get_mut(&id).expect("Map for given IslandId should exist but was not found")
+    pub fn get_map_mut(&mut self, id: u64) -> Option<&mut Map> {
+        self.maps.get_mut(&id)
     }
 
-    pub fn get_map(&self, id: u64) -> & Map {
-        self.maps.get(&id).expect("Map for given IslandId should exist but was not found")
+    pub fn get_map(&self, id: u64) -> Option<&Map> {
+        self.maps.get(&id)
     }
 }
 
@@ -31,6 +31,10 @@ pub enum TerrainType {
     Boardwalk,
     TreeTrunk,
     Leaves
+}
+
+pub fn is_base_terrain(tile: &TerrainType) -> bool {
+    matches!(tile, TerrainType::Sand | TerrainType::Rock)
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
@@ -99,6 +103,7 @@ impl Chunk {
 pub struct Map {
     pub chunks: HashMap<IVec3, Chunk>,
     pub player_count : u32,
+    pub enemy_count : u32,
     pub leave_position : IVec3
 }
 
@@ -106,8 +111,9 @@ impl Map {
     pub fn new() -> Self {
         let chunks = HashMap::new();
         let player_count = 0;
+        let enemy_count = 0;
         let leave_position = IVec3::ZERO;
-        Map { chunks, player_count, leave_position }
+        Map { chunks, player_count, enemy_count, leave_position }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
@@ -259,9 +265,9 @@ impl Map {
         let mut result: Vec<IVec3> = Vec::new();
         for (chunk_coords, chunk) in chunk_entries {
             for (i, tile) in chunk.tiles.iter().enumerate() {
-                if let TileType::Terrain(_) = tile.kind {
+                if let TileType::Terrain(terrain_type) = tile.kind {
                     let pos = self.chunk_to_world_coords(*chunk_coords, i);
-                    if pos.y < 0 {
+                    if pos.y < 0 || !is_base_terrain(&terrain_type) {
                         continue;
                     }
 

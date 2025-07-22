@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
 use crate::components::humanoid::{AttackCooldowns, Health};
 use crate::components::island_maps::IslandMaps;
-use crate::components::player::LocalPlayer;
+use crate::components::character::LocalPlayer;
+use crate::plugins::damage_numbers::SpawnNumberEvent;
 use crate::preludes::network_preludes::*;
 use std::collections::HashMap;
 
@@ -84,7 +85,7 @@ fn server_apply_attack(
     mut commands: Commands,
 ) {
     let msg = client_trigger.event();
-    let attacker = client_trigger.entity();
+    let attacker = client_trigger.target();
 
     commands.server_trigger_targets(
         ToClients {
@@ -96,11 +97,11 @@ fn server_apply_attack(
 }
 
 fn client_visualize_attack(
-    client_trigger: Trigger<AttackInfo>,
+    server_trigger: Trigger<AttackInfo>,
     mut commands: Commands,
     attack_reg: Res<AttackRegistry>
 ) {
-    attack_reg.spawn(client_trigger.attack_id, &mut commands, client_trigger.entity(), client_trigger.offset);
+    attack_reg.spawn(server_trigger.attack_id, &mut commands, server_trigger.target(), server_trigger.offset);
 }
 
 fn tick_attack_cooldowns(
@@ -131,12 +132,21 @@ fn damage_trigger(
     damage_trigger: Trigger<DamageEvent>,
     island_maps: Res<IslandMaps>,
     mut health: Query<&mut Health>,
-    server: Option<Res<RenetServer>>
+    server: Option<Res<RenetServer>>,
+    mut commands: Commands
 ) {
     if server.is_some() {
         if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
             if let Some(victim) = map.get_target(damage_trigger.offset) {
                 if let Ok(mut hp) = health.get_mut(victim) {
+                    commands.server_trigger_targets(
+                        ToClients {
+                            mode : SendMode::Broadcast,
+                            event: SpawnNumberEvent {amount: damage_trigger.damage, position: damage_trigger.offset}
+                        },
+                        victim
+                    );
+
                     hp.damage(damage_trigger.damage);
                 }
             }
@@ -164,14 +174,15 @@ fn attack_trigger(
     attack_cat: Res<AttackCatalogue>,
     mut cooldowns_query: Query<&mut AttackCooldowns, With<LocalPlayer>>
 ) {
-    let cooldowns : &mut AttackCooldowns = &mut cooldowns_query.single_mut();
-    if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
-        if !timer.finished() { 
-            return; 
+    if let Ok(cooldowns) = &mut cooldowns_query.single_mut() {
+        if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
+            if !timer.finished() { 
+                return; 
+            }
         }
-    }
 
-    cooldowns.0.insert(attack_trigger.attack_id, Timer::from_seconds(attack_cat.0.get(&attack_trigger.attack_id).unwrap().cooldown, TimerMode::Once));
+        cooldowns.0.insert(attack_trigger.attack_id, Timer::from_seconds(attack_cat.0.get(&attack_trigger.attack_id).unwrap().cooldown, TimerMode::Once));
+    }
 
     commands.client_trigger_targets(
         ClientAttack {

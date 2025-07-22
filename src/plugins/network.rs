@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode::Continuous, WinitSettings};
+use bevy_replicon_renet2::netcode::ServerSetupConfig;
+use bevy_replicon_renet2::RenetChannelsExt;
 use serde::Deserialize;
 use serde::Serialize;
 use crate::components::island_maps::IslandMaps;
 use crate::components::overworld::{Ship, WorldSeed};
-use crate::components::player::LocalPlayer;
+use crate::components::character::LocalPlayer;
 use crate::preludes::network_preludes::*;
 use crate::GameState;
 
@@ -125,25 +127,23 @@ fn read_cli(
             state.set(GameState::Overworld);
         }
         Cli::Server { port } => {
-            let server_channels_config = channels.server_configs();
-            let client_channels_config = channels.client_configs();
-
-            let server = RenetServer::new(ConnectionConfig {
-                server_channels_config,
-                client_channels_config,
-                ..Default::default()
-            });
+            let server = RenetServer::new(ConnectionConfig::from_channels(
+                channels.server_configs(),
+                channels.client_configs(),
+            ));
 
             let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port))?;
-            let server_config = ServerConfig {
+            let public_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
+            let socket = UdpSocket::bind(public_addr)?;
+            let server_config = ServerSetupConfig {
                 current_time,
                 max_clients: 10,
                 protocol_id: PROTOCOL_ID,
                 authentication: ServerAuthentication::Unsecure,
-                public_addresses: Default::default(),
+                socket_addresses: vec![vec![public_addr]],
             };
-            let transport = NetcodeServerTransport::new(server_config, socket)?;
+            let transport = NetcodeServerTransport::new(server_config, NativeSocket::new(socket).unwrap())?;
+
 
             commands.insert_resource(server);
             commands.insert_resource(transport);
@@ -165,26 +165,23 @@ fn read_cli(
             state.set(GameState::Overworld);
         }
         Cli::Client { port, ip } => {
-            let server_channels_config = channels.server_configs();
-            let client_channels_config = channels.client_configs();
-
-            let client = RenetClient::new(ConnectionConfig {
-                server_channels_config,
-                client_channels_config,
-                ..Default::default()
-            });
+            let client = RenetClient::new(
+                ConnectionConfig::from_channels(channels.server_configs(), channels.client_configs()),
+                false,
+            );
 
             let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
             let client_id = current_time.as_millis() as u64;
             let server_addr = SocketAddr::new(ip, port);
-            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
+            let socket = UdpSocket::bind((ip, 0))?;
             let authentication = ClientAuthentication::Unsecure {
                 client_id,
                 protocol_id: PROTOCOL_ID,
+                socket_id: 0,
                 server_addr,
                 user_data: None,
             };
-            let transport = NetcodeClientTransport::new(current_time, authentication, socket)?;
+            let transport = NetcodeClientTransport::new(current_time, authentication, NativeSocket::new(socket).unwrap())?;
 
             commands.insert_resource(client);
             commands.insert_resource(transport);
@@ -219,7 +216,7 @@ fn make_local(
     trigger: Trigger<MakeLocal>, 
     mut commands: Commands,
 ) {
-    commands.entity(trigger.entity()).insert(LocalPlayer);
+    commands.entity(trigger.target()).insert(LocalPlayer);
 }
 
 fn client_connected(
@@ -227,16 +224,16 @@ fn client_connected(
     mut commands: Commands,
     world_seed: Res<WorldSeed>
 ) {
-    info!("{:?} connected", trigger.entity());
+    info!("{:?} connected", trigger.target());
 
     let boat_entity = commands.spawn((
         Ship,
-        OwnedBy(trigger.entity())
+        OwnedBy(trigger.target())
     )).id();
 
     commands.server_trigger_targets(
         ToClients {
-            mode: SendMode::Direct(trigger.entity()),
+            mode: SendMode::Direct(trigger.target()),
             event: MakeLocal,
         },
         boat_entity,
@@ -244,7 +241,7 @@ fn client_connected(
 
     commands.server_trigger_targets(
         ToClients {
-            mode: SendMode::Direct(trigger.entity()),
+            mode: SendMode::Direct(trigger.target()),
             event: GameInfo {
                 seed: world_seed.0
             },
@@ -256,7 +253,7 @@ fn client_connected(
 fn client_disconnected(
     trigger: Trigger<OnRemove, ConnectedClient>,
 ) {
-    info!("{:?} disconnected", trigger.entity());
+    info!("{:?} disconnected", trigger.target());
 }
 
 const PORT: u16 = 5000;
