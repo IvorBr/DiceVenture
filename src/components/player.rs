@@ -7,7 +7,7 @@ pub struct Inventory {
 }
 
 
-type ItemId = u64;
+pub type ItemId = u64;
 
 #[derive(Clone)]
 pub struct ItemStack { pub id: ItemId, pub qty: u16 }
@@ -15,7 +15,8 @@ pub struct ItemStack { pub id: ItemId, pub qty: u16 }
 #[derive(Event)]
 pub struct RewardEvent {
     pub items: Option<Vec<ItemStack>>,
-    pub xp: u64
+    pub xp: u64,
+    pub gold: u64,
 }
 
 #[derive(Event)]

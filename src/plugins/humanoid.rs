@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use crate::components::humanoid::ActionState;
-use crate::components::enemy::SnakePart;
 use crate::components::island::OnIsland;
 use crate::components::character::LocalPlayer;
 use crate::preludes::humanoid_preludes::*;
@@ -31,7 +30,6 @@ fn standard_death_check(
 ) {
     for (health, entity) in &entities {
         if health.get() == 0 {
-            println!("{}, {}", entity, health.get());
             commands.entity(entity).insert(RemoveEntity);
         }
     }
@@ -46,7 +44,7 @@ fn remove_entities(
     for (entity, position, island, local_player) in entities.iter() {
         islands.get_map_mut(island.0).map(|map| map.remove_entity(position.0));
         println!("Despawning entity: {:?}", entity);
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
         
         if local_player.is_some() {
             state.set(GameState::Overworld);

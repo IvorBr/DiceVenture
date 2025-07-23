@@ -1,5 +1,5 @@
-use bevy::{prelude::*, render::camera::RenderTarget, window::WindowRef};
-use bevy_replicon::prelude::{Channel, ClientTriggerAppExt, ServerTriggerAppExt};
+use bevy::prelude::*;
+use bevy_replicon::prelude::{Channel, ServerTriggerAppExt};
 use serde::{Deserialize, Serialize};
 use crate::{components::character::{Character, LocalPlayer}, plugins::camera::PlayerCamera};
 
@@ -7,7 +7,6 @@ pub struct DamageNumbersPlugin;
 impl Plugin for DamageNumbersPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_server_trigger::<SpawnNumberEvent>(Channel::Unordered)
         .add_observer(spawn_damage_numbers)
         .init_resource::<DamageFont>()
         .add_systems(
@@ -29,6 +28,7 @@ struct DamageNumber {
 
 #[derive(Event, Serialize, Deserialize)]
 pub struct SpawnNumberEvent {
+    pub entity: Entity,
     pub amount: u64,
     pub position: IVec3,
 }
@@ -45,7 +45,7 @@ fn spawn_damage_numbers(
     }
 
     if let Ok(character_entity) = local_character.single() {
-        let color = if character_entity == num_trigger.target() {
+        let color = if character_entity == num_trigger.entity {
             Color::LinearRgba(LinearRgba { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 })
         } else {
             Color::LinearRgba(LinearRgba { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })

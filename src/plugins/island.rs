@@ -43,8 +43,8 @@ fn client_island_cleanup(
     islandroot_query: Query<Entity, With<IslandRoot>>
 ) {
     //clean up visuals
-    if let Ok(island_root) = islandroot_query.get_single() {
-        commands.entity(island_root).despawn_recursive();
+    if let Ok(island_root) = islandroot_query.single() {
+        commands.entity(island_root).despawn();
     }
 
     //clean up players
@@ -98,7 +98,7 @@ fn visualize_island(
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
 ){    
-    if let Ok((entity, island)) = islands.get_single() {
+    if let Ok((entity, island)) = islands.single() {
         let island_root = commands
         .spawn((
             IslandRoot,
@@ -139,7 +139,7 @@ fn visualize_island(
                         ..Default::default()
                     })),
                     Transform::from_xyz(position.x as f32, position.y as f32, position.z as f32),
-                )).set_parent(island_root);
+                )).insert(ChildOf(island_root));
             }
         }
 
@@ -152,7 +152,7 @@ fn visualize_island(
                     ..Default::default()
                 })),
                 Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
-            )).set_parent(island_root);
+            )).insert(ChildOf(island_root));
         }
         commands.entity(entity).remove::<VisualizeIsland>();
     }
@@ -221,7 +221,7 @@ fn elimination_island_objective(
     for (entity, island) in target_query.iter() {
         if let Some(map) = island_maps.get_map_mut(island.0) {
             if map.enemy_count == 0 {
-                if let Ok(island_root) = islandroot_query.get_single() {
+                if let Ok(island_root) = islandroot_query.single() {
                     let top_tiles = map.above_water_top_tiles();
                     let chest_pos = top_tiles.choose(&mut rand::rng()).unwrap().clone() + IVec3::Y;
 
@@ -237,7 +237,7 @@ fn elimination_island_objective(
                         Chest,
                         Health::new(30),
                         OnIsland(island.0),
-                    )).set_parent(island_root).id();
+                    )).insert(ChildOf(island_root)).id();
 
                     map.add_entity_ivec3(chest_pos, Tile::new(TileType::Enemy, chest_entity));
                     commands.entity(entity).insert(CompletedIslandObjective);
@@ -300,7 +300,7 @@ fn clean_up_island(
             
             for (enemy_entity, island_id) in enemy_query.iter() {
                 if *id == island_id.0 {
-                    commands.entity(enemy_entity).despawn_recursive();
+                    commands.entity(enemy_entity).despawn();
 
                 }
             }

@@ -6,7 +6,6 @@ use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
 use crate::components::character::MovementCooldown;
 use crate::plugins::attack::key_of;
-use crate::plugins::attack::AttackEvent;
 use crate::plugins::attack::AttackRegistry;
 use crate::plugins::attack::ClientAttack;
 use crate::preludes::humanoid_preludes::*;
@@ -40,7 +39,7 @@ fn movement_input(
 ) {
     cooldown.timer.tick(time.delta());
 
-    let Ok(action_state) = player.get_single() else {
+    let Ok(action_state) = player.single() else {
         return;
     };
     
@@ -79,7 +78,7 @@ fn movement_input(
         return;
     }
 
-    if let Ok(camera) = camera.get_single() {
+    if let Ok(camera) = camera.single() {
         direction = match camera.direction {
             0 => direction,
             1 => IVec3::new(direction.z, 0, -direction.x),
@@ -92,7 +91,7 @@ fn movement_input(
     if (just_pressed && cooldown.timer.elapsed_secs() >= 0.05)
         || (!just_pressed && cooldown.timer.finished())
     {
-        move_events.send(MoveDirection(direction));
+        move_events.write(MoveDirection(direction));
         cooldown.timer.reset();
     }
 }
@@ -105,7 +104,7 @@ fn attack_input(
     attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
-    let Ok((entity, action_state)) = player.get_single() else {
+    let Ok((entity, action_state)) = player.single() else {
         return;
     };
     
@@ -126,7 +125,7 @@ fn attack_input(
         direction.x -= 1;
     }
 
-    if let Ok(camera) = camera.get_single() {
+    if let Ok(camera) = camera.single() {
         direction = match camera.direction {
             0 => direction,
             1 => IVec3::new(direction.z, 0, -direction.x),

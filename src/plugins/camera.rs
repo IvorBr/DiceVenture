@@ -96,7 +96,7 @@ fn change_camera_target(
     new_targets: Query<Entity, Added<NewCameraTarget>>,
     old_targets: Query<Entity, With<CameraTarget>>,
 ) {
-    if let Ok(entity) = new_targets.get_single() {
+    if let Ok(entity) = new_targets.single() {
         println!("{entity:?} new camera target");
         commands.entity(entity)
             .remove::<NewCameraTarget>()

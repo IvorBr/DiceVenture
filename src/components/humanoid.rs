@@ -17,8 +17,9 @@ impl Health {
         self.value
     }
 
-    pub fn damage(&mut self, amount: u64) {
+    pub fn damage(&mut self, amount: u64) -> u64 {
         self.value = self.value.saturating_sub(amount);
+        self.value
     }
 }
 

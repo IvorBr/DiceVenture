@@ -218,7 +218,7 @@ fn spawn_overworld(
             Transform::from_xyz(pos.x, 0.2, pos.y),
             Visibility::Inherited, 
             Island((i + 1) as u64),
-            Atoll
+            island_type
         ))
         .observe(on_clicked_island)
         .insert(ChildOf(overworld_root));

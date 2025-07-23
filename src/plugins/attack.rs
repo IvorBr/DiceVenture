@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
+use crate::components::enemy::Enemy;
 use crate::components::humanoid::{AttackCooldowns, Health};
 use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
+use crate::components::player::RewardEvent;
 use crate::plugins::damage_numbers::SpawnNumberEvent;
 use crate::preludes::network_preludes::*;
 use std::collections::HashMap;
@@ -71,8 +73,10 @@ impl Plugin for AttackPlugin {
         .insert_resource(AttackCatalogue::default())
         .add_client_trigger::<ClientAttack>(Channel::Unordered)
         .add_server_trigger::<AttackInfo>(Channel::Unordered)
-        .add_observer((server_apply_attack))
+        .add_server_trigger::<ClientDamageEvent>(Channel::Unordered)
+        .add_observer(server_apply_attack)
         .add_observer(client_visualize_attack)
+        .add_observer(client_damage_trigger)
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
         .add_systems(PreUpdate, tick_attack_cooldowns.run_if(server_running))
@@ -128,6 +132,32 @@ impl DamageEvent {
     }
 }
 
+#[derive(Event, Serialize, Deserialize)]
+pub struct ClientDamageEvent {
+    amount: u64,
+    position: IVec3,
+    remaining_health: u64
+}
+
+fn client_damage_trigger(
+    damage_trigger: Trigger<ClientDamageEvent>,
+    mut commands: Commands,
+    enemies: Query<Entity, With<Enemy>>
+){
+    commands.trigger(SpawnNumberEvent {amount: damage_trigger.amount, position: damage_trigger.position, entity: damage_trigger.target()} );
+
+    if damage_trigger.remaining_health == 0 {
+        if let Ok(enemy_entity) = enemies.get(damage_trigger.target()) {
+            // TODO: get the type of the enemy and its possible loot, xp and gold
+            commands.trigger(RewardEvent {
+                items: None,
+                xp: 1,
+                gold: 0,
+            });
+        }
+    }   
+}
+
 fn damage_trigger(
     damage_trigger: Trigger<DamageEvent>,
     island_maps: Res<IslandMaps>,
@@ -139,15 +169,15 @@ fn damage_trigger(
         if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
             if let Some(victim) = map.get_target(damage_trigger.offset) {
                 if let Ok(mut hp) = health.get_mut(victim) {
+                    let remaining_health = hp.damage(damage_trigger.damage);
+
                     commands.server_trigger_targets(
                         ToClients {
                             mode : SendMode::Broadcast,
-                            event: SpawnNumberEvent {amount: damage_trigger.damage, position: damage_trigger.offset}
+                            event: ClientDamageEvent {amount: damage_trigger.damage, position: damage_trigger.offset, remaining_health: remaining_health},
                         },
                         victim
                     );
-
-                    hp.damage(damage_trigger.damage);
                 }
             }
         }

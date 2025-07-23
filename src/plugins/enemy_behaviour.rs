@@ -26,7 +26,7 @@ fn find_closest_in_range(players: &Query<(&Position, Entity), With<Character>>, 
     closest_player
 }
 
-fn passive_aggro_system(mut enemies: Query<&mut EnemyState, With<PassiveAggro>>) {
+fn passive_aggro_system(mut _enemies: Query<&mut EnemyState, With<PassiveAggro>>) {
     // Attack if you are attacked, still need to be created
 }
 

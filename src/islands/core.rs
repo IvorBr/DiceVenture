@@ -1,5 +1,5 @@
 use bevy::{prelude::*};
-use rand::{rngs::StdRng, seq::{IndexedRandom, SliceRandom}};
+use rand::{rngs::StdRng, seq::SliceRandom};
 use std::collections::HashSet;
 
 use crate::components::island_maps::{Map, TerrainType, Tile, TileType};

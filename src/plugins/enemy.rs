@@ -160,7 +160,7 @@ fn enemy_death_check(
 ) {
     for (island, health, entity) in &entities {
         if health.get() == 0 {
-            let map = island_maps.get_map_mut(island.0).map(|map| map.enemy_count -= 1);
+            island_maps.get_map_mut(island.0).map(|map| map.enemy_count -= 1);
             
             commands.entity(entity).insert(RemoveEntity);
             

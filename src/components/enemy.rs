@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use bevy_replicon::prelude::Replicated;
 use std::cmp::Ordering;
 
-use crate::plugins::attack::{AttackId, AttackSpec};
+use crate::plugins::attack::AttackId;
 
 use super::humanoid::Humanoid;
 
@@ -180,7 +180,6 @@ pub const BISHOP_RULE: MoveRule = MoveRule {
     can_climb: false,
     heuristic: chebyshev,
 };
-
 
 pub const QUEEN_RULE: MoveRule = MoveRule {
     offsets: &OMNI,
