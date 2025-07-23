@@ -182,7 +182,7 @@ fn spawn_overworld(
             })),
             Transform::from_xyz(0.0, 0.2, 0.0),
             StarterIsland,
-            Island(19),
+            Island(0),
             Visibility::Inherited,
             Atoll
         ))
