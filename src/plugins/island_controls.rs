@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::attacks::base_attack::BaseAttack;
+use crate::attacks::cut_through::CutThrough;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
@@ -136,7 +137,7 @@ fn attack_input(
     }
 
     if direction != IVec3::ZERO {
-        let attack_id = key_of::<BaseAttack>();
+        let attack_id = key_of::<CutThrough>();
         commands.client_trigger_targets(
             ClientAttack {
                 attack_id: attack_id,

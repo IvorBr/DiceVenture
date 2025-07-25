@@ -6,7 +6,6 @@ pub struct Inventory {
     pub slots: Vec<Option<ItemStack>>,
 }
 
-
 pub type ItemId = u64;
 
 #[derive(Clone)]
@@ -23,7 +22,7 @@ pub struct RewardEvent {
 pub struct SaveEvent;
 
 #[derive(Clone)]
-pub struct ItemSpec { pub name: &'static str, pub max: u16, /*icon, etc.*/ }
+pub struct ItemSpec { pub name: &'static str, pub max: u16,}
 
 #[derive(Resource, Default)]
 pub struct ItemCatalogue(pub HashMap<ItemId, ItemSpec>);

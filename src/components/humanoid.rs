@@ -5,12 +5,13 @@ use crate::plugins::attack::AttackId;
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct Health{
-    value : u64,
+    pub value : u64,
+    pub max: u64
 }
 
 impl Health {
     pub fn new(value: u64) -> Self {
-        Health { value }
+        Health { value: value , max: value}
     }
 
     pub fn get(&self) -> u64 {
@@ -25,7 +26,7 @@ impl Health {
 
 impl Default for Health {
     fn default() -> Self {
-        Self { value : 30 }
+        Self { value : 30, max: 30 }
     }
 }
 

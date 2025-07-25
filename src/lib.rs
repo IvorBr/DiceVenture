@@ -24,6 +24,7 @@ use crate::components::overworld::WorldSeed;
 use crate::plugins::attack::AttackPlugin;
 use crate::plugins::damage_numbers::DamageNumbersPlugin;
 use crate::plugins::player::PlayerPlugin;
+use crate::plugins::ui::UIPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
 enum GameState {
@@ -64,6 +65,7 @@ impl Plugin for AppPlugin {
         .add_plugins((
             NetworkPlugin,
             PlayerPlugin,
+            UIPlugin,
             
             OverworldPlugin,
             ShipPlugin,

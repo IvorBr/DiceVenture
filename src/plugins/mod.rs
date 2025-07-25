@@ -11,3 +11,4 @@ pub mod enemy_behaviour;
 pub mod attack;
 pub mod player;
 pub mod damage_numbers;
+pub mod ui;

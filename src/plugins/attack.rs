@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
+use crate::attacks::cut_through::CutThroughPlugin;
 use crate::components::enemy::Enemy;
 use crate::components::humanoid::{AttackCooldowns, Health};
 use crate::components::island_maps::IslandMaps;
@@ -80,7 +81,7 @@ impl Plugin for AttackPlugin {
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
         .add_systems(PreUpdate, tick_attack_cooldowns.run_if(server_running))
-        .add_plugins(BaseAttackPlugin);
+        .add_plugins((BaseAttackPlugin, CutThroughPlugin));
     }
 }
 
