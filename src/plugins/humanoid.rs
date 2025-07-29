@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
 use crate::components::humanoid::ActionState;
+use crate::components::humanoid::Status;
+use crate::components::humanoid::StatusFlags;
+use crate::components::humanoid::Stunned;
 use crate::components::island::OnIsland;
 use crate::components::character::LocalPlayer;
 use crate::preludes::humanoid_preludes::*;
@@ -19,8 +22,8 @@ impl Plugin for HumanoidPlugin {
             standard_death_check.run_if(server_running),
             animate_movement
         ).in_set(IslandSet))
+        .add_systems(PreUpdate, sync_status_flags_system)
         .add_systems(Update, (remove_entities).after(ClientSet::Receive));
-        
     }
 }
 
@@ -67,5 +70,29 @@ fn animate_movement(
             transform.translation = target;
             *action_state = ActionState::Idle;
         }
+    }
+}
+
+pub fn sync_status_flags_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(
+        Entity,
+        &mut StatusFlags,
+        Option<&mut Stunned>,
+    )>,
+) {
+    for (entity, mut flags, stunned_opt) in &mut query {
+        let mut status = Status::empty();
+
+        if let Some(mut stunned) = stunned_opt {
+            if stunned.timer.tick(time.delta()).finished() {
+                commands.entity(entity).remove::<Stunned>();
+            } else {
+                status |= Status::STUNNED;
+            }
+        }
+
+        flags.0 = status;
     }
 }

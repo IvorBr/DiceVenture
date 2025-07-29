@@ -2858,6 +2858,7 @@ dependencies = [
  "bevy_replicon_renet2",
  "bevy_rich_text3d",
  "bevy_vox_scene",
+ "bitflags 2.9.1",
  "clap",
  "dolly",
  "log",

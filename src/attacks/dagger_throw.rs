@@ -1,13 +1,18 @@
+use bevy::math::ops::floor;
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
-use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent};
+use crate::components::island_maps::{self, IslandMaps};
+use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, PreDamageEvent, Interruptable, Projectile};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
 const DAMAGE: u64 = 8;
+const ATTACK_RANGE : u8 = 3;
+
 
 #[derive(Component)]
+#[require(Interruptable)]
 pub struct DaggerThrow {
     direction: IVec3,
     timer: Timer,
@@ -44,7 +49,7 @@ fn register_attack(
                 timer: Timer::from_seconds(0.20, TimerMode::Once),
                 hit: false,
             });
-        } 
+        }
     });
     let key = key_of::<DaggerThrow>();
     catalog.0.insert(key, AttackSpec {offsets: &STANDARD, cooldown: 0.8, damage: DAMAGE });
@@ -53,29 +58,43 @@ fn register_attack(
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
-    mut attacks: Query<(Entity, &Position, &mut Transform, &mut DaggerThrow, &mut ActionState, &OnIsland)>,
+    island_maps: Res<IslandMaps>,
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut attacks: Query<(Entity, &ChildOf, &mut DaggerThrow)>,
+    mut parent_query: Query<(&Position, &mut Transform, &mut ActionState, &OnIsland)>,
 ) {
-    for (entity, pos, mut transform, mut attack, mut state, island) in &mut attacks {
-        *state = ActionState::Attacking;
-        attack.timer.tick(time.delta());
+        for (child_entity, parent, mut attack) in &mut attacks {
+        if let Ok((pos, mut transform, mut state, island)) = parent_query.get_mut(parent.0) {
+            *state = ActionState::Attacking;
+            attack.timer.tick(time.delta());
 
-        let t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
-        let magnitude = if t < 0.5 {
-            t
-        } else {
-            1.0 - t
-        };
-        if !attack.hit && t >= 0.5 {
-            attack.hit = true;
-            commands.trigger(DamageEvent::new(island.0, pos.0 + attack.direction, DAMAGE));
-        }
+            if island_maps.get_map(island.0).is_some() && !attack.hit {
+                attack.hit = true;
+                commands.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(0.3, 0.3, 0.3))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::srgb(1.0, 1.0, 1.0),
+                        ..Default::default()
+                    })),
+                    Projectile {
+                        owner: parent.0,
+                        traveled: 0.0,
+                        range: ATTACK_RANGE,
+                        direction: Vec3::new(attack.direction.x as f32, attack.direction.y as f32, attack.direction.z as f32),
+                        speed: 1.0,
+                        damage: DAMAGE
+                    },
+                    Transform::from_translation(transform.translation),
+                    OnIsland(island.0)
+                ));
+            }
 
-        transform.translation = pos.0.as_vec3() + attack.direction.as_vec3() * magnitude * 0.5;
-
-        if attack.timer.finished() {
-            transform.translation = pos.0.as_vec3();
-            commands.entity(entity).remove::<DaggerThrow>();
-            *state = ActionState::Idle;
+            if attack.timer.finished() {
+                transform.translation = pos.0.as_vec3();
+                commands.entity(child_entity).despawn();
+                *state = ActionState::Idle;
+            }
         }
     }
 }

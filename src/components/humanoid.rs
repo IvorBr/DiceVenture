@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::plugins::attack::AttackId;
+use bitflags::bitflags;
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct Health{
@@ -54,5 +55,31 @@ pub enum ActionState {
 #[require(AttackCooldowns)]
 pub struct Humanoid;
 
-    #[derive(Component, Default)]
-    pub struct AttackCooldowns(pub HashMap<AttackId, Timer>);
+#[derive(Component, Default)]
+pub struct AttackCooldowns(pub HashMap<AttackId, Timer>);
+
+bitflags! {
+    #[derive(Default)]
+    pub struct Status: u8 {
+        const STUNNED = 0b00000001;
+        const ROOTED =  0b00000010;
+    }
+}
+
+#[derive(Component, Default)]
+pub struct StatusFlags(pub Status);
+
+#[derive(Component)]
+pub struct Stunned {
+    pub timer: Timer,
+    pub source: Entity,
+}
+
+impl Stunned {
+    pub fn new(duration: f32, source: Entity) -> Self {
+        Self {
+            timer: Timer::from_seconds(duration, TimerMode::Once),
+            source,
+        }
+    }
+}

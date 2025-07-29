@@ -1,14 +1,18 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
+use crate::attacks::counter::CounterPlugin;
 use crate::attacks::cut_through::CutThroughPlugin;
+use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
-use crate::components::humanoid::{AttackCooldowns, Health};
+use crate::components::humanoid::{AttackCooldowns, Health, Stunned};
+use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
 use crate::components::player::RewardEvent;
 use crate::plugins::damage_numbers::SpawnNumberEvent;
 use crate::preludes::network_preludes::*;
+use crate::CHUNK_SIZE;
 use std::collections::HashMap;
 
 use std::hash::{BuildHasher, BuildHasherDefault, Hasher};
@@ -35,12 +39,16 @@ pub struct AttackInfo{
     pub offset: IVec3
 }
 
+#[derive(Component)]
+pub struct AttackMarker;
+
 pub type SpawnFunction = fn(&mut Commands, Entity, IVec3);
 
 #[derive(Resource, Default)]
 pub struct AttackRegistry {
     map: HashMap<AttackId, SpawnFunction>,
 }
+
 impl AttackRegistry {
     pub fn register<T: 'static>(&mut self, func: SpawnFunction) -> AttackId {
         let key = key_of::<T>();
@@ -50,7 +58,12 @@ impl AttackRegistry {
     
     pub fn spawn(&self, key: AttackId, commands: &mut Commands, entity: Entity, offset: IVec3) {
         if let Some(func) = self.map.get(&key) { 
-            func(commands, entity, offset) 
+            let child_entity = commands.spawn(
+                AttackMarker,
+            ).insert(ChildOf(entity))
+            .id();
+
+            func(commands, child_entity, offset) 
         }
         else { error!("Unknown attack key {key}") }
     }
@@ -80,8 +93,8 @@ impl Plugin for AttackPlugin {
         .add_observer(client_damage_trigger)
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
-        .add_systems(PreUpdate, tick_attack_cooldowns.run_if(server_running))
-        .add_plugins((BaseAttackPlugin, CutThroughPlugin));
+        .add_systems(PreUpdate, (tick_attack_cooldowns.run_if(server_running), projectile_system, interrupt_attack_stun))
+        .add_plugins((BaseAttackPlugin, CutThroughPlugin, DaggerThrowPlugin, CounterPlugin));
     }
 }
 
@@ -122,14 +135,30 @@ fn tick_attack_cooldowns(
 
 #[derive(Event)]
 pub struct DamageEvent {
-    island: u64,
-    offset: IVec3,
-    damage: u64
+    pub owner: Entity,
+    pub island: u64,
+    pub offset: IVec3,
+    pub damage: u64
 }
 
 impl DamageEvent {
-    pub fn new(island: u64, offset: IVec3, damage: u64) -> Self {
-        Self { island, offset, damage }
+    pub fn new(owner: Entity, island: u64, offset: IVec3, damage: u64) -> Self {
+        Self { owner, island, offset, damage }
+    }
+}
+
+#[derive(Event)]
+pub struct PreDamageEvent {
+    pub owner: Entity,
+    pub island: u64,
+    pub offset: IVec3,
+    pub damage: u64,
+    pub interrupted: bool
+}
+
+impl PreDamageEvent {
+    pub fn new(owner: Entity, island: u64, offset: IVec3, damage: u64) -> Self {
+        Self { owner, island, offset, damage, interrupted : false }
     }
 }
 
@@ -224,4 +253,70 @@ fn attack_trigger(
     );
 
     attack_reg.spawn(attack_trigger.attack_id, &mut commands, attack_trigger.entity, attack_trigger.offset);
+}
+
+#[derive(Component)]
+pub struct Projectile {
+    pub owner: Entity,
+    pub direction: Vec3,
+    pub traveled: f32,
+    pub range: u8,
+    pub speed: f32,
+    pub damage: u64,
+}
+
+fn projectile_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut projectiles: Query<(Entity, &mut Transform, &mut Projectile, &OnIsland)>,
+    island_maps: Res<IslandMaps>,
+) {
+    for (entity, mut transform, mut projectile, island) in &mut projectiles {
+        let delta = projectile.speed * CHUNK_SIZE as f32 * time.delta_secs();
+        projectile.traveled += delta;
+
+        transform.translation += projectile.direction * CHUNK_SIZE as f32  * delta;
+
+        if let Some(map) = island_maps.get_map(island.0) {
+            let tile_pos = IVec3::new(transform.translation.x.floor() as i32, transform.translation.y.floor() as i32, transform.translation.z.floor() as i32);
+            let tile = map.get_tile(tile_pos);
+            match tile.kind {
+                TileType::Terrain(_) => {
+                    commands.entity(entity).despawn();
+                },
+                TileType::Player | TileType::Enemy => {
+                    if tile.entity != projectile.owner {
+                        commands.trigger(PreDamageEvent::new(
+                            projectile.owner,
+                            island.0,
+                            tile_pos,
+                            projectile.damage
+                        ));
+                        commands.entity(entity).despawn();
+                    }
+                }
+                _ => continue,
+            }
+
+            if projectile.traveled >= projectile.range as f32 {
+                commands.entity(entity).despawn(); //TODO: despawn animation?
+                continue;
+            }
+        }
+    }
+}
+
+#[derive(Component, Default)]
+pub struct Interruptable;
+
+fn interrupt_attack_stun(
+    mut commands: Commands,
+    attacks: Query<(Entity, &ChildOf), With<Interruptable>>,
+    stunned: Query<(), With<Stunned>>,
+) {
+    for (attack_entity, parent) in &attacks {
+        if stunned.get(parent.0).is_ok() {
+            commands.entity(attack_entity).despawn();
+        }
+    }
 }

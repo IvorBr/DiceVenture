@@ -3,7 +3,7 @@ use bevy_replicon::prelude::{AppRuleExt, Channel, ClientTriggerAppExt, ClientTri
 use crate::components::character::LocalPlayer;
 use crate::OverworldSet;
 use crate::components::overworld::*;
-use crate::plugins::camera::NewCameraTarget;
+use crate::plugins::camera::{DollyCamera, NewCameraTarget, PlayerCamera};
 
 pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
@@ -54,10 +54,12 @@ fn spawn_overworld_ship(
 fn user_ship_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    camera: Query<&DollyCamera, With<PlayerCamera>>,
+
     mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>)>,
     mut commands: Commands
 ) {
-    if let Ok((entity, mut ship_transform)) = ship.get_single_mut() {
+    if let Ok((entity, mut ship_transform)) = ship.single_mut() {
         let mut direction = Vec3::ZERO;
 
         if keyboard_input.pressed(KeyCode::KeyW) {
@@ -71,6 +73,16 @@ fn user_ship_movement(
         }
         if keyboard_input.pressed(KeyCode::KeyD) {
             direction.x += 1.0;
+        }
+        
+        if let Ok(camera) = camera.single() {
+            direction = match camera.direction {
+                0 => direction,
+                1 => Vec3::new(direction.z, 0.0, -direction.x),
+                2 => Vec3::new(-direction.x, 0.0, -direction.z),
+                3 => Vec3::new(-direction.z, 0.0, direction.x),
+                _ => direction,
+            };
         }
 
         if direction != Vec3::ZERO {
