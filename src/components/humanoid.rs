@@ -46,6 +46,7 @@ pub enum ActionState {
     Idle,
     Moving,
     Attacking,
+    Stunned,
 }
 
 #[derive(Component, Serialize, Deserialize, Default)]
@@ -53,6 +54,7 @@ pub enum ActionState {
 #[require(Health)]
 #[require(ActionState)]
 #[require(AttackCooldowns)]
+#[require(StatusFlags)]
 pub struct Humanoid;
 
 #[derive(Component, Default)]
@@ -72,14 +74,12 @@ pub struct StatusFlags(pub Status);
 #[derive(Component)]
 pub struct Stunned {
     pub timer: Timer,
-    pub source: Entity,
 }
 
 impl Stunned {
-    pub fn new(duration: f32, source: Entity) -> Self {
+    pub fn new(duration: f32) -> Self {
         Self {
             timer: Timer::from_seconds(duration, TimerMode::Once),
-            source,
         }
     }
 }

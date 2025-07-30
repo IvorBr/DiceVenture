@@ -32,7 +32,7 @@ fn spawn_overworld_ship(
     mut ships: Query<(Entity, Option<&LocalPlayer>), (With<Ship>, Without<Transform>)>,
     world_root_query: Query<Entity, With<OverworldRoot>>,
 ) {
-    if let Ok(overworld_root) = world_root_query.get_single() {
+    if let Ok(overworld_root) = world_root_query.single() {
         for (entity, local) in ships.iter_mut() {
             commands.entity(entity).insert((
                 Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
@@ -42,7 +42,7 @@ fn spawn_overworld_ship(
                 })),
                 Transform::from_xyz(0.0, 0.3, 0.75),
                 Visibility::Inherited
-            )).set_parent(overworld_root);
+            )).insert(ChildOf(overworld_root));
     
             if local.is_some() { 
                 commands.entity(entity).insert(NewCameraTarget);

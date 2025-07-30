@@ -1,14 +1,13 @@
-use bevy::math::ops::floor;
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
-use crate::components::island_maps::{self, IslandMaps};
-use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, PreDamageEvent, Interruptable, Projectile};
+use crate::components::island_maps::IslandMaps;
+use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, Interruptable, Projectile};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
 const DAMAGE: u64 = 8;
-const ATTACK_RANGE : u8 = 3;
+const ATTACK_RANGE : u8 = 8;
 
 
 #[derive(Component)]

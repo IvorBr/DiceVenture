@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
-use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, PreDamageEvent, Interruptable};
+use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
@@ -70,7 +70,7 @@ fn perform_attack(
             };
             if !attack.hit && t >= 0.5 {
                 attack.hit = true;
-                commands.trigger(PreDamageEvent::new(
+                commands.trigger(DamageEvent::new(
                     parent.0,
                     island.0,
                     pos.0 + attack.direction,

@@ -16,3 +16,8 @@ pub struct LocalPlayer;
 pub struct MovementCooldown {
     pub timer: Timer,
 }
+
+#[derive(Component)]
+pub struct PendingSkillCast {
+    pub attack_id: u64,
+}

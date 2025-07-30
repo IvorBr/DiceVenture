@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
-use crate::components::island_maps::{self, IslandMaps, Tile, TileType};
-use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, PreDamageEvent, Interruptable};
+use crate::components::island_maps::{IslandMaps, Tile, TileType};
+use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
@@ -68,7 +68,7 @@ fn perform_attack(
                 let mut check_pos = pos.0 + attack.direction;
                 if let Some(map) = island_maps.get_map_mut(island.0) {
                     while map.get_target(check_pos).is_some() {
-                        commands.trigger(PreDamageEvent::new(
+                        commands.trigger(DamageEvent::new(
                             parent.0,
                             island.0,
                             check_pos,

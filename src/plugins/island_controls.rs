@@ -3,6 +3,7 @@ use crate::attacks::base_attack::BaseAttack;
 use crate::attacks::counter::Counter;
 use crate::attacks::cut_through::CutThrough;
 use crate::attacks::dagger_throw::DaggerThrow;
+use crate::components::character::PendingSkillCast;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
@@ -27,7 +28,7 @@ impl Plugin for CharacterPlugin {
         })
         .add_systems(Update, (
             (apply_movement).run_if(server_running),
-            (movement_input, attack_input).in_set(IslandSet)
+            (movement_input, attack_input, skill_input, resolve_pending_skill_cast.after(skill_input)).in_set(IslandSet)
         ));
     }
 }
@@ -46,7 +47,7 @@ fn movement_input(
         return;
     };
     
-    if *action_state == ActionState::Attacking {
+    if *action_state != ActionState::Idle && *action_state != ActionState::Moving {
         return;
     }
 
@@ -103,15 +104,15 @@ fn attack_input(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-    player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Character>)>,
+    player: Query<(Entity, &ActionState, Option<&PendingSkillCast>), (With<LocalPlayer>, With<Character>)>,
     attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
-    let Ok((entity, action_state)) = player.single() else {
+    let Ok((entity, action_state, skill_cast_opt)) = player.single() else {
         return;
     };
     
-    if *action_state != ActionState::Idle {
+    if *action_state != ActionState::Idle || skill_cast_opt.is_some() {
         return;
     }
 
@@ -208,3 +209,88 @@ fn apply_movement(
     }
 }
 
+fn skill_input(
+    mut commands: Commands,
+    input: Res<ButtonInput<KeyCode>>,
+    player: Query<Entity, (With<LocalPlayer>, With<Character>, Without<PendingSkillCast>)>,
+) {
+    let Ok(entity) = player.single() else {
+        return;
+    };
+
+    let mut attack_id = None;
+
+    if input.just_pressed(KeyCode::Digit1) {
+        attack_id = Some(key_of::<Counter>());
+    }
+    if input.just_pressed(KeyCode::Digit2) {
+        attack_id = Some(key_of::<CutThrough>());
+    }
+    if input.just_pressed(KeyCode::Digit3) {
+        attack_id = Some(key_of::<DaggerThrow>());
+    }
+    if input.just_pressed(KeyCode::Digit4) {
+        attack_id = Some(key_of::<BaseAttack>());
+    }
+
+    if let Some(attack_id) = attack_id {
+        commands.entity(entity).insert(PendingSkillCast { attack_id });
+    }
+}
+
+fn resolve_pending_skill_cast(
+    mut commands: Commands,
+    input: Res<ButtonInput<KeyCode>>,
+    camera: Query<&DollyCamera, With<PlayerCamera>>,
+    mut players: Query<(Entity, &PendingSkillCast, &ActionState), With<LocalPlayer>>,
+    attack_reg: Res<AttackRegistry>,
+) {
+    for (entity, pending, action_state) in players.iter_mut() {
+        if *action_state == ActionState::Stunned {
+            return;
+        }
+
+        if input.just_pressed(KeyCode::Space) {
+            commands.entity(entity).remove::<PendingSkillCast>();
+            continue;
+        }
+
+        let mut direction = IVec3::ZERO;
+        if input.just_pressed(KeyCode::ArrowUp) {
+            direction.z -= 1;
+        }
+        if input.just_pressed(KeyCode::ArrowDown) {
+            direction.z += 1;
+        }
+        if input.just_pressed(KeyCode::ArrowLeft) {
+            direction.x -= 1;
+        }
+        if input.just_pressed(KeyCode::ArrowRight) {
+            direction.x += 1;
+        }
+
+        if direction == IVec3::ZERO {
+            continue;
+        }
+
+        if let Ok(camera) = camera.single() {
+            direction = match camera.direction {
+                0 => direction,
+                1 => IVec3::new(direction.z, 0, -direction.x),
+                2 => IVec3::new(-direction.x, 0, -direction.z),
+                3 => IVec3::new(-direction.z, 0, direction.x),
+                _ => direction,
+            };
+        }
+
+        commands.client_trigger_targets(
+            ClientAttack {
+                attack_id: pending.attack_id,
+                offset: direction,
+            },
+            entity,
+        );
+        attack_reg.spawn(pending.attack_id, &mut commands, entity, direction);
+        commands.entity(entity).remove::<PendingSkillCast>();
+    }
+}

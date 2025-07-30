@@ -88,6 +88,7 @@ impl Plugin for AttackPlugin {
         .add_client_trigger::<ClientAttack>(Channel::Unordered)
         .add_server_trigger::<AttackInfo>(Channel::Unordered)
         .add_server_trigger::<ClientDamageEvent>(Channel::Unordered)
+        .add_event::<NegatedDamageEvent>()
         .add_observer(server_apply_attack)
         .add_observer(client_visualize_attack)
         .add_observer(client_damage_trigger)
@@ -148,18 +149,12 @@ impl DamageEvent {
 }
 
 #[derive(Event)]
-pub struct PreDamageEvent {
+pub struct NegatedDamageEvent {
     pub owner: Entity,
+    pub victim: Entity,
     pub island: u64,
     pub offset: IVec3,
     pub damage: u64,
-    pub interrupted: bool
-}
-
-impl PreDamageEvent {
-    pub fn new(owner: Entity, island: u64, offset: IVec3, damage: u64) -> Self {
-        Self { owner, island, offset, damage, interrupted : false }
-    }
 }
 
 #[derive(Event, Serialize, Deserialize)]
@@ -191,23 +186,50 @@ fn client_damage_trigger(
 fn damage_trigger(
     damage_trigger: Trigger<DamageEvent>,
     island_maps: Res<IslandMaps>,
-    mut health: Query<&mut Health>,
+    mut health: Query<(&mut Health, Option<&Children>)>,
+    negate_query: Query<(), With<NegatingDamage>>,
     server: Option<Res<RenetServer>>,
-    mut commands: Commands
+    mut commands: Commands,
+    mut process_writer: EventWriter<NegatedDamageEvent>,
 ) {
     if server.is_some() {
         if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
             if let Some(victim) = map.get_target(damage_trigger.offset) {
-                if let Ok(mut hp) = health.get_mut(victim) {
-                    let remaining_health = hp.damage(damage_trigger.damage);
+                if let Ok((mut hp, children)) = health.get_mut(victim) {
+                    let mut negated = false;
 
-                    commands.server_trigger_targets(
-                        ToClients {
-                            mode : SendMode::Broadcast,
-                            event: ClientDamageEvent {amount: damage_trigger.damage, position: damage_trigger.offset, remaining_health: remaining_health},
-                        },
-                        victim
-                    );
+                    if let Some(children) = children {
+                        for child in children.iter() {
+                            if negate_query.get(child).is_ok() {
+                                negated = true;
+                                process_writer.write(NegatedDamageEvent {
+                                    owner: damage_trigger.owner,
+                                    victim: child,
+                                    island: damage_trigger.island,
+                                    offset: damage_trigger.offset,
+                                    damage: damage_trigger.damage,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if !negated {
+                        let remaining_health = hp.damage(damage_trigger.damage);
+
+                        commands.server_trigger_targets(
+                            ToClients {
+                                mode: SendMode::Broadcast,
+                                event: ClientDamageEvent {
+                                    amount: damage_trigger.damage,
+                                    position: damage_trigger.offset,
+                                    remaining_health,
+                                },
+                            },
+                            victim,
+                        );
+                    }
+                    
                 }
             }
         }
@@ -275,7 +297,7 @@ fn projectile_system(
         let delta = projectile.speed * CHUNK_SIZE as f32 * time.delta_secs();
         projectile.traveled += delta;
 
-        transform.translation += projectile.direction * CHUNK_SIZE as f32  * delta;
+        transform.translation += projectile.direction * delta;
 
         if let Some(map) = island_maps.get_map(island.0) {
             let tile_pos = IVec3::new(transform.translation.x.floor() as i32, transform.translation.y.floor() as i32, transform.translation.z.floor() as i32);
@@ -283,10 +305,11 @@ fn projectile_system(
             match tile.kind {
                 TileType::Terrain(_) => {
                     commands.entity(entity).despawn();
+                    continue;
                 },
                 TileType::Player | TileType::Enemy => {
                     if tile.entity != projectile.owner {
-                        commands.trigger(PreDamageEvent::new(
+                        commands.trigger(DamageEvent::new(
                             projectile.owner,
                             island.0,
                             tile_pos,
@@ -295,7 +318,7 @@ fn projectile_system(
                         commands.entity(entity).despawn();
                     }
                 }
-                _ => continue,
+                _ => (),
             }
 
             if projectile.traveled >= projectile.range as f32 {
@@ -308,6 +331,9 @@ fn projectile_system(
 
 #[derive(Component, Default)]
 pub struct Interruptable;
+
+#[derive(Component, Default)]
+pub struct NegatingDamage;
 
 fn interrupt_attack_stun(
     mut commands: Commands,

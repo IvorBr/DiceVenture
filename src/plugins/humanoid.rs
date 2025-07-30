@@ -22,7 +22,7 @@ impl Plugin for HumanoidPlugin {
             standard_death_check.run_if(server_running),
             animate_movement
         ).in_set(IslandSet))
-        .add_systems(PreUpdate, sync_status_flags_system)
+        .add_systems(PreUpdate, (sync_status_flags_system, status_flags_to_actionstate_system).chain())
         .add_systems(Update, (remove_entities).after(ClientSet::Receive));
     }
 }
@@ -94,5 +94,17 @@ pub fn sync_status_flags_system(
         }
 
         flags.0 = status;
+    }
+}
+
+pub fn status_flags_to_actionstate_system(
+    mut query: Query<(&StatusFlags, &mut ActionState)>,
+) {
+    for (flags, mut action_state) in &mut query {
+        if flags.0.contains(Status::STUNNED) {
+            *action_state = ActionState::Stunned;
+        } else if *action_state == ActionState::Stunned {
+            *action_state = ActionState::Idle;
+        }
     }
 }

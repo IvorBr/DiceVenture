@@ -15,6 +15,9 @@ use clap::Parser;
 #[derive(Component, Clone, Copy, Serialize, Deserialize)]
 pub struct OwnedBy(pub Entity);
 
+#[derive(Event, Serialize, Deserialize)]
+struct ClientInfo;
+
 
 pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
@@ -27,8 +30,10 @@ impl Plugin for NetworkPlugin {
         .add_plugins((RepliconPlugins, RepliconRenetPlugins))
         .init_resource::<Cli>()
         .insert_resource(IslandMaps::new())
+        .add_client_trigger::<ClientInfo>(Channel::Ordered)
         .add_server_trigger::<MakeLocal>(Channel::Ordered)
         .add_server_trigger::<GameInfo>(Channel::Unordered)
+        .make_trigger_independent::<GameInfo>()
         .add_observer(client_connected)
         .add_observer(client_disconnected)
         .add_observer(make_local)
@@ -36,7 +41,8 @@ impl Plugin for NetworkPlugin {
         .add_server_event::<MapUpdate>(Channel::Ordered)
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
-        );
+        )
+        .add_systems(Update, client_request_info.run_if(client_just_connected));
     }
 }
 
@@ -106,7 +112,6 @@ pub struct MakeLocal;
 pub struct GameInfo{
     seed: u64,
 }
-
 
 fn read_cli(
     mut commands: Commands,
@@ -202,12 +207,17 @@ fn read_cli(
     Ok(())
 }
 
+fn client_request_info(
+    mut commands: Commands
+){
+    commands.client_trigger(ClientInfo);
+}
+
 fn game_info_trigger(
     trigger: Trigger<GameInfo>,
     mut commands: Commands,
     mut state: ResMut<NextState<GameState>>
 ) {
-    println!("received {}, too late probably", trigger.seed);
     commands.insert_resource(WorldSeed(trigger.seed));
     state.set(GameState::Overworld);
 }
@@ -220,31 +230,31 @@ fn make_local(
 }
 
 fn client_connected(
-    trigger: Trigger<OnAdd, ConnectedClient>, 
+    trigger: Trigger<FromClient<ClientInfo>>, 
     mut commands: Commands,
     world_seed: Res<WorldSeed>
 ) {
-    info!("{:?} connected", trigger.target());
+    info!("{:?} connected", trigger.client_entity);
 
     let boat_entity = commands.spawn((
         Ship,
         OwnedBy(trigger.target())
     )).id();
 
-    commands.server_trigger_targets(
+
+    commands.server_trigger(
         ToClients {
-            mode: SendMode::Direct(trigger.target()),
-            event: MakeLocal,
-        },
-        boat_entity,
+            mode: SendMode::Direct(trigger.client_entity),
+            event: GameInfo {
+                seed: world_seed.0
+            },
+        }
     );
 
     commands.server_trigger_targets(
         ToClients {
-            mode: SendMode::Direct(trigger.target()),
-            event: GameInfo {
-                seed: world_seed.0
-            },
+            mode: SendMode::Direct(trigger.client_entity),
+            event: MakeLocal,
         },
         boat_entity,
     );
