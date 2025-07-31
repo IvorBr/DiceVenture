@@ -1,14 +1,15 @@
+use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
+use bevy_replicon::shared::server_entity_map::ServerEntityMap;
 use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
 use crate::attacks::counter::CounterPlugin;
 use crate::attacks::cut_through::CutThroughPlugin;
 use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
-use crate::components::humanoid::{AttackCooldowns, Health, Stunned};
+use crate::components::humanoid::{ActiveSkills, AttackCooldowns, Health, Stunned};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
-use crate::components::character::LocalPlayer;
 use crate::components::player::RewardEvent;
 use crate::plugins::damage_numbers::SpawnNumberEvent;
 use crate::preludes::network_preludes::*;
@@ -58,12 +59,7 @@ impl AttackRegistry {
     
     pub fn spawn(&self, key: AttackId, commands: &mut Commands, entity: Entity, offset: IVec3) {
         if let Some(func) = self.map.get(&key) { 
-            let child_entity = commands.spawn(
-                AttackMarker,
-            ).insert(ChildOf(entity))
-            .id();
-
-            func(commands, child_entity, offset) 
+            func(commands, entity, offset) 
         }
         else { error!("Unknown attack key {key}") }
     }
@@ -88,14 +84,46 @@ impl Plugin for AttackPlugin {
         .add_client_trigger::<ClientAttack>(Channel::Unordered)
         .add_server_trigger::<AttackInfo>(Channel::Unordered)
         .add_server_trigger::<ClientDamageEvent>(Channel::Unordered)
+        .add_mapped_server_trigger::<NegateDamageTrigger>(Channel::Unordered)
         .add_event::<NegatedDamageEvent>()
         .add_observer(server_apply_attack)
         .add_observer(client_visualize_attack)
         .add_observer(client_damage_trigger)
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
+        .add_observer(damage_negated_trigger)
         .add_systems(PreUpdate, (tick_attack_cooldowns.run_if(server_running), projectile_system, interrupt_attack_stun))
         .add_plugins((BaseAttackPlugin, CutThroughPlugin, DaggerThrowPlugin, CounterPlugin));
+    }
+}
+
+#[derive(Event, Deserialize, Serialize, MapEntities)]
+pub struct NegateDamageTrigger {
+    pub attack_id: u64,
+    pub owner: Entity,
+    pub victim: Entity,
+    pub island: u64,
+    pub offset: IVec3,
+    pub damage: u64,
+}
+
+
+fn damage_negated_trigger(
+    trigger: Trigger<NegateDamageTrigger>,
+    mut process_writer: EventWriter<NegatedDamageEvent>,
+    active_skills_q: Query<&ActiveSkills>
+){
+    println!("Mapped entities, victim: {:?}, owner {:?}", trigger.victim, trigger.owner);
+    if let Ok(active_skills) = active_skills_q.get(trigger.victim){
+        if let Some(skill_entity) = active_skills.0.get(&trigger.attack_id) {
+            process_writer.write(NegatedDamageEvent {
+                owner: trigger.owner,
+                victim: *skill_entity,
+                island: trigger.island,
+                offset: trigger.offset,
+                damage: trigger.damage,
+            });
+        }
     }
 }
 
@@ -118,9 +146,20 @@ fn server_apply_attack(
 fn client_visualize_attack(
     server_trigger: Trigger<AttackInfo>,
     mut commands: Commands,
-    attack_reg: Res<AttackRegistry>
+    attack_reg: Res<AttackRegistry>,
+    mut active_skills_q: Query<&mut ActiveSkills>
 ) {
-    attack_reg.spawn(server_trigger.attack_id, &mut commands, server_trigger.target(), server_trigger.offset);
+    if let Ok(mut active_skills) = active_skills_q.get_mut(server_trigger.target()) {
+        let child_entity = commands.spawn(
+            AttackMarker,
+        ).insert(ChildOf(server_trigger.target()))
+        .id();
+
+        println!("We need to visualize for: {:?}", server_trigger.target());
+        active_skills.0.insert(server_trigger.attack_id, child_entity);
+
+        attack_reg.spawn(server_trigger.attack_id, &mut commands, child_entity, server_trigger.offset);
+    }
 }
 
 fn tick_attack_cooldowns(
@@ -187,10 +226,9 @@ fn damage_trigger(
     damage_trigger: Trigger<DamageEvent>,
     island_maps: Res<IslandMaps>,
     mut health: Query<(&mut Health, Option<&Children>)>,
-    negate_query: Query<(), With<NegatingDamage>>,
+    negate_query: Query<&NegatingDamage>,
     server: Option<Res<RenetServer>>,
-    mut commands: Commands,
-    mut process_writer: EventWriter<NegatedDamageEvent>,
+    mut commands: Commands
 ) {
     if server.is_some() {
         if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
@@ -200,15 +238,20 @@ fn damage_trigger(
 
                     if let Some(children) = children {
                         for child in children.iter() {
-                            if negate_query.get(child).is_ok() {
+                            if let Ok(negate_instance) = negate_query.get(child) {
+
                                 negated = true;
-                                process_writer.write(NegatedDamageEvent {
-                                    owner: damage_trigger.owner,
-                                    victim: child,
-                                    island: damage_trigger.island,
-                                    offset: damage_trigger.offset,
-                                    damage: damage_trigger.damage,
-                                });
+                                commands.server_trigger(ToClients { 
+                                    mode: SendMode::Broadcast, 
+                                    event: NegateDamageTrigger {
+                                        attack_id: negate_instance.0,
+                                        owner: damage_trigger.owner,
+                                        victim: victim,
+                                        island: damage_trigger.island,
+                                        offset: damage_trigger.offset,
+                                        damage: damage_trigger.damage,
+                                    }},
+                                );
                                 break;
                             }
                         }
@@ -236,6 +279,8 @@ fn damage_trigger(
     }
 }
 
+
+
 #[derive(Event)]
 pub struct AttackEvent {
     entity: Entity,
@@ -254,9 +299,10 @@ fn attack_trigger(
     mut commands: Commands,
     attack_reg: Res<AttackRegistry>,
     attack_cat: Res<AttackCatalogue>,
-    mut cooldowns_query: Query<&mut AttackCooldowns, With<LocalPlayer>>
+    mut cooldowns_query: Query<&mut AttackCooldowns>,
+    mut active_skills_q: Query<&mut ActiveSkills>
 ) {
-    if let Ok(cooldowns) = &mut cooldowns_query.single_mut() {
+    if let Ok(cooldowns) = &mut cooldowns_query.get_mut(attack_trigger.entity) {
         if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
             if !timer.finished() { 
                 return; 
@@ -266,15 +312,24 @@ fn attack_trigger(
         cooldowns.0.insert(attack_trigger.attack_id, Timer::from_seconds(attack_cat.0.get(&attack_trigger.attack_id).unwrap().cooldown, TimerMode::Once));
     }
 
-    commands.client_trigger_targets(
-        ClientAttack {
-            attack_id: attack_trigger.attack_id,
-            offset: attack_trigger.offset
-        },
-        attack_trigger.entity
-    );
+    if let Ok(mut active_skills) = active_skills_q.get_mut(attack_trigger.entity) {
+        let child_entity = commands.spawn(
+            AttackMarker,
+        ).insert(ChildOf(attack_trigger.entity))
+        .id();
 
-    attack_reg.spawn(attack_trigger.attack_id, &mut commands, attack_trigger.entity, attack_trigger.offset);
+        active_skills.0.insert(attack_trigger.attack_id, child_entity);
+
+        commands.client_trigger_targets(
+            ClientAttack {
+                attack_id: attack_trigger.attack_id,
+                offset: attack_trigger.offset
+            },
+            attack_trigger.entity
+        );
+
+        attack_reg.spawn(attack_trigger.attack_id, &mut commands, child_entity, attack_trigger.offset);
+    }
 }
 
 #[derive(Component)]
@@ -333,7 +388,7 @@ fn projectile_system(
 pub struct Interruptable;
 
 #[derive(Component, Default)]
-pub struct NegatingDamage;
+pub struct NegatingDamage(pub u64);
 
 fn interrupt_attack_stun(
     mut commands: Commands,

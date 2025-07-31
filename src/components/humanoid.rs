@@ -55,6 +55,7 @@ pub enum ActionState {
 #[require(ActionState)]
 #[require(AttackCooldowns)]
 #[require(StatusFlags)]
+#[require(ActiveSkills)]
 pub struct Humanoid;
 
 #[derive(Component, Default)]
@@ -83,3 +84,6 @@ impl Stunned {
         }
     }
 }
+
+#[derive(Component, Default)]
+pub struct ActiveSkills(pub HashMap<u64, Entity>);

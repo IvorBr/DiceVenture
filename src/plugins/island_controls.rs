@@ -10,6 +10,7 @@ use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
 use crate::components::character::MovementCooldown;
 use crate::plugins::attack::key_of;
+use crate::plugins::attack::AttackEvent;
 use crate::plugins::attack::AttackRegistry;
 use crate::plugins::attack::ClientAttack;
 use crate::preludes::humanoid_preludes::*;
@@ -105,7 +106,6 @@ fn attack_input(
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
     player: Query<(Entity, &ActionState, Option<&PendingSkillCast>), (With<LocalPlayer>, With<Character>)>,
-    attack_reg: Res<AttackRegistry>,
 ) {
     let mut direction = IVec3::ZERO;
     let Ok((entity, action_state, skill_cast_opt)) = player.single() else {
@@ -141,15 +141,11 @@ fn attack_input(
 
     if direction != IVec3::ZERO {
         let attack_id = key_of::<BaseAttack>();
-        commands.client_trigger_targets(
-            ClientAttack {
-                attack_id: attack_id,
-                offset: direction
-            },
-            entity
-        );
-
-        attack_reg.spawn(attack_id, &mut commands, entity, direction);
+        commands.trigger(AttackEvent::new(
+            entity,
+            attack_id,
+            direction
+        ));
     }
 }
 
@@ -243,7 +239,6 @@ fn resolve_pending_skill_cast(
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
     mut players: Query<(Entity, &PendingSkillCast, &ActionState), With<LocalPlayer>>,
-    attack_reg: Res<AttackRegistry>,
 ) {
     for (entity, pending, action_state) in players.iter_mut() {
         if *action_state == ActionState::Stunned {
@@ -283,14 +278,11 @@ fn resolve_pending_skill_cast(
             };
         }
 
-        commands.client_trigger_targets(
-            ClientAttack {
-                attack_id: pending.attack_id,
-                offset: direction,
-            },
+        commands.trigger(AttackEvent::new(
             entity,
-        );
-        attack_reg.spawn(pending.attack_id, &mut commands, entity, direction);
+            pending.attack_id,
+            direction
+        ));
         commands.entity(entity).remove::<PendingSkillCast>();
     }
 }

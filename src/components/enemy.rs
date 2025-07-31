@@ -77,24 +77,6 @@ pub struct SnakePart {
     pub next: Option<Entity>
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub enum AttackPhase {
-    Windup,  
-    Strike
-}
-
-#[derive(Component, Deserialize, Serialize, Clone)]
-pub struct WindUp {
-    pub target_pos: IVec3,
-    pub timer: Timer,
-    pub phase: AttackPhase,
-}
-
-#[derive(Deserialize, Event, Serialize)]
-pub struct StartAttack {
-    pub attack: WindUp
-}
-
 #[derive(Component, Clone, Copy)]
 pub struct MoveRule {
     pub offsets : &'static [IVec3],

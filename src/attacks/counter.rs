@@ -9,15 +9,13 @@ const ATTACK_LENGTH: f32 = 5.0;
 const COOLDOWN: f32 = 6.0;
 
 #[derive(Component)]
-#[require(NegatingDamage)]
+#[require(NegatingDamage(key_of::<Counter>()))]
 pub struct Counter {
     direction: IVec3,
     timer: Timer,
     hit: bool
 }
 
-#[derive(Component)]
-pub struct CounterVisualMarker;
 
 impl Default for Counter {
     fn default() -> Self {
@@ -61,6 +59,7 @@ fn process_counter(
     mut commands: Commands,
 ) {
     for event in reader.read() {
+        println!("WE NOT MAKING IT HERE");
         if let Ok(entity) = counter_query.get(event.victim) {
             commands.entity(event.owner).insert(Stunned::new(10.0));
             commands.entity(entity).despawn();

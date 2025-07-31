@@ -1,9 +1,11 @@
 use bevy::prelude::*;
-use crate::components::{character::LocalPlayer, humanoid::Health, player::{CharacterXp, Gold, Inventory}, ui::*};
+use crate::{attacks::{base_attack::BaseAttack, counter::Counter, cut_through::CutThrough, dagger_throw::DaggerThrow}, components::{character::LocalPlayer, humanoid::{AttackCooldowns, Health}, player::{CharacterXp, Gold, Inventory}, ui::*}, plugins::attack::{key_of, AttackId}};
 
 const BORDER_RADIUS : Val = Val::Px(5.0);
 const XP_BAR_WIDTH : f32 = 100.0;
 const BASE_FONT_SIZE : f32 = 18.0;
+pub const NUM_SKILLS: usize = 4;
+pub const SKILL_ICON_SIZE: f32 = 48.0;
 
 pub struct UIPlugin;
 impl Plugin for UIPlugin {
@@ -11,9 +13,20 @@ impl Plugin for UIPlugin {
         app
         .insert_resource(InventoryUIState::default())
         .add_systems(Startup, setup_ui)
-        .add_systems(Update, (inventory_controls, xp_changed, character_health_changed, gold_changed, inventory_update));
+        .add_systems(Update, (inventory_controls, xp_changed, character_health_changed, gold_changed, inventory_update, update_skill_cooldowns));
     }
 }
+
+
+
+#[derive(Component)]
+pub struct SkillSlot {
+    pub index: usize,
+    pub attack_id: AttackId,
+}
+
+#[derive(Component)]
+pub struct SkillCooldownOverlay;
 
 fn setup_ui(
     mut commands: Commands, 
@@ -25,87 +38,95 @@ fn setup_ui(
             position_type: PositionType::Absolute,
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
-            justify_content: JustifyContent::FlexEnd, 
-            align_items: AlignItems::Center,
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(4.0),
-            padding: UiRect::all(Val::Percent(1.0)),
             ..default()
         },
         BackgroundColor(Color::NONE),
     ))
     .with_children(|parent| {
-        // HP background
-        parent.spawn((
-            Node {
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                flex_wrap: FlexWrap::Wrap,
-                padding: UiRect::all(Val::Px(4.0)),
-                ..default()
-            },
-            BorderRadius::all(BORDER_RADIUS),
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
-        )).with_children(|hp_box| {
-            //HP text
-            hp_box.spawn((
-                Text::new("HP"),
-                TextColor(Color::WHITE),
-                TextFont {
-                    font_size: BASE_FONT_SIZE,
+        parent.spawn(
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Percent(1.0),
+            left: Val::Percent(40.0),
+            justify_content: JustifyContent::FlexEnd, 
+            align_items: AlignItems::Center,
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(4.0),
+            ..default()
+        }).with_children(|parent| {
+            // HP background
+            parent.spawn((
+                Node {
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    flex_wrap: FlexWrap::Wrap,
+                    padding: UiRect::all(Val::Px(4.0)),
                     ..default()
                 },
-                HealthText,
-            ));
-        });
+                BorderRadius::all(BORDER_RADIUS),
+                BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
+            )).with_children(|hp_box| {
+                //HP text
+                hp_box.spawn((
+                    Text::new("HP"),
+                    TextColor(Color::WHITE),
+                    TextFont {
+                        font_size: BASE_FONT_SIZE,
+                        ..default()
+                    },
+                    HealthText,
+                ));
+            });
 
-        // XP background
-        parent.spawn((
-            Node {
-                width: Val::Px(XP_BAR_WIDTH),
-                height: Val::Px(20.0),
-                position_type: PositionType::Relative,
-                ..default()
-            },
-            BorderRadius::all(BORDER_RADIUS),
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
-        ))
-        .with_children(|bar| {
-            // XP progress bar
-            bar.spawn((
+            // XP background
+            parent.spawn((
                 Node {
                     width: Val::Px(XP_BAR_WIDTH),
                     height: Val::Px(20.0),
-                    justify_content: JustifyContent::Center,
+                    position_type: PositionType::Relative,
                     ..default()
                 },
-                BackgroundColor(Color::srgba(1.0, 0.875, 0.0, 1.0)),
                 BorderRadius::all(BORDER_RADIUS),
-                XPBar,
-            ));
-
-            // Level number
-            bar.spawn((
-                Text::new("1"),
-                TextColor(Color::WHITE),
-                TextFont {
-                    font_size: BASE_FONT_SIZE,
-                    ..default()
-                },
-                LevelText,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(50.0),
-                    top: Val::Percent(50.0),
-                    margin: UiRect {
-                        left: Val::Px(-BASE_FONT_SIZE/2.0),
-                        top: Val::Px(-BASE_FONT_SIZE/2.0),
+                BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
+            ))
+            .with_children(|bar| {
+                // XP progress bar
+                bar.spawn((
+                    Node {
+                        width: Val::Px(XP_BAR_WIDTH),
+                        height: Val::Px(20.0),
+                        justify_content: JustifyContent::Center,
                         ..default()
                     },
-                    ..default()
-                },
-            ));
+                    BackgroundColor(Color::srgba(1.0, 0.875, 0.0, 1.0)),
+                    BorderRadius::all(BORDER_RADIUS),
+                    XPBar,
+                ));
+
+                // Level number
+                bar.spawn((
+                    Text::new("1"),
+                    TextColor(Color::WHITE),
+                    TextFont {
+                        font_size: BASE_FONT_SIZE,
+                        ..default()
+                    },
+                    LevelText,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(50.0),
+                        top: Val::Percent(50.0),
+                        margin: UiRect {
+                            left: Val::Px(-BASE_FONT_SIZE/2.0),
+                            top: Val::Px(-BASE_FONT_SIZE/2.0),
+                            ..default()
+                        },
+                        ..default()
+                    },
+                ));
+            });
         });
+        
 
         parent.spawn((
             //Gold Background
@@ -134,7 +155,91 @@ fn setup_ui(
                 GoldText,
             ));
         });
+
+        //Skill UI
+        parent.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Percent(1.0),
+                left: Val::Percent(50.0),
+                flex_direction: FlexDirection::Row,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::FlexEnd,
+                row_gap: Val::Px(4.0),
+                column_gap: Val::Px(8.0),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+        ))
+        .with_children(|parent| {
+            let skill_ids = vec![
+                key_of::<Counter>(),
+                key_of::<CutThrough>(),
+                key_of::<DaggerThrow>(),
+                key_of::<BaseAttack>(),
+            ];
+
+            for (index, attack_id) in skill_ids.iter().enumerate() {
+                parent.spawn((
+                    Node {
+                        width: Val::Px(SKILL_ICON_SIZE),
+                        height: Val::Px(SKILL_ICON_SIZE),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        position_type: PositionType::Relative,
+                        ..default()
+                    },
+                    BorderRadius::all(BORDER_RADIUS),
+                    BackgroundColor(Color::srgba(0.2, 0.2, 0.2, 1.0)),
+                    SkillSlot {
+                        index,
+                        attack_id: *attack_id,
+                    },
+                ))
+                .with_children(|icon| {
+                    // Cooldown text (centered)
+                    icon.spawn((
+                        Text::new(""),
+                        TextColor(Color::WHITE),
+                        TextFont {
+                            font_size: BASE_FONT_SIZE,
+                            ..default()
+                        },
+                        SkillCooldownOverlay,
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Percent(50.0),
+                            top: Val::Percent(50.0),
+                            margin: UiRect {
+                                left: Val::Px(-BASE_FONT_SIZE / 2.0),
+                                top: Val::Px(-BASE_FONT_SIZE / 2.0),
+                                ..default()
+                            },
+                            ..default()
+                        },
+                    ));
+
+                    // Key number (bottom-right)
+                    icon.spawn((
+                        Text::new(format!("{}", index + 1)),
+                        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.5)),
+                        TextFont {
+                            font_size: BASE_FONT_SIZE * 0.75,
+                            ..default()
+                        },
+                        Node {
+                            position_type: PositionType::Absolute,
+                            right: Val::Px(4.0),
+                            bottom: Val::Px(2.0),
+                            ..default()
+                        },
+                    ));
+                });
+            }
+        });
+
     });
+
 
     // Inventory UI
     commands.spawn((
@@ -153,6 +258,32 @@ fn setup_ui(
         BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
         InventoryPanel,
     ));
+}
+
+fn update_skill_cooldowns(
+    cooldown_query: Query<&AttackCooldowns, With<LocalPlayer>>,
+    skill_slots: Query<&SkillSlot>,
+    mut overlays: Query<(&ChildOf, &mut Text, &mut Visibility), With<SkillCooldownOverlay>>,
+) {
+    let Ok(cooldowns) = cooldown_query.single() else { return; };
+
+    for (child_of, mut text, mut visibility) in &mut overlays {
+        if let Ok(slot) = skill_slots.get(child_of.parent()) {
+            if let Some(timer) = cooldowns.0.get(&slot.attack_id) {
+                if !timer.finished() {
+                    let secs = timer.remaining_secs();
+                    *text = Text::new(format!("{:.0}", secs));
+                    *visibility = Visibility::Visible;
+                } else {
+                    *text = Text::new("");
+                    *visibility = Visibility::Hidden;
+                }
+            } else {
+                *text = Text::new("");
+                *visibility = Visibility::Hidden;
+            }
+        }
+    }
 }
 
 fn inventory_controls(
