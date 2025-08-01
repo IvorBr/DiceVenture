@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::plugins::attack::AttackId;
+
 #[derive(Resource, Default)]
 pub struct InventoryUIState {
     pub open: bool,
@@ -22,3 +24,12 @@ pub struct RootUI;
 
 #[derive(Component)]
 pub struct GoldText;
+
+#[derive(Component)]
+pub struct SkillSlot {
+    pub index: usize,
+    pub attack_id: AttackId,
+}
+
+#[derive(Component)]
+pub struct SkillCooldownOverlay;

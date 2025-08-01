@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_replicon::prelude::{Channel, ServerTriggerAppExt};
 use serde::{Deserialize, Serialize};
 use crate::{components::character::{Character, LocalPlayer}, plugins::camera::PlayerCamera};
 

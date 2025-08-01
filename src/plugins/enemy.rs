@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::humanoid::{ActionState, ActiveSkills, AttackCooldowns};
+use crate::components::humanoid::{ActionState, AttackCooldowns};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::overworld::{LocalIsland, Island};

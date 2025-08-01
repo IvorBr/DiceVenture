@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{attacks::{base_attack::BaseAttack, counter::Counter, cut_through::CutThrough, dagger_throw::DaggerThrow}, components::{character::LocalPlayer, humanoid::{AttackCooldowns, Health}, player::{CharacterXp, Gold, Inventory}, ui::*}, plugins::attack::{key_of, AttackId}};
+use crate::{attacks::{base_attack::BaseAttack, counter::Counter, cut_through::CutThrough, dagger_throw::DaggerThrow}, components::{character::LocalPlayer, humanoid::{AttackCooldowns, Health}, player::{CharacterXp, Gold, Inventory}, ui::*}, plugins::attack::{key_of}};
 
 const BORDER_RADIUS : Val = Val::Px(5.0);
 const XP_BAR_WIDTH : f32 = 100.0;
@@ -16,17 +16,6 @@ impl Plugin for UIPlugin {
         .add_systems(Update, (inventory_controls, xp_changed, character_health_changed, gold_changed, inventory_update, update_skill_cooldowns));
     }
 }
-
-
-
-#[derive(Component)]
-pub struct SkillSlot {
-    pub index: usize,
-    pub attack_id: AttackId,
-}
-
-#[derive(Component)]
-pub struct SkillCooldownOverlay;
 
 fn setup_ui(
     mut commands: Commands, 
@@ -190,7 +179,7 @@ fn setup_ui(
                         ..default()
                     },
                     BorderRadius::all(BORDER_RADIUS),
-                    BackgroundColor(Color::srgba(0.2, 0.2, 0.2, 1.0)),
+                    BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 1.0)),
                     SkillSlot {
                         index,
                         attack_id: *attack_id,
@@ -239,7 +228,6 @@ fn setup_ui(
         });
 
     });
-
 
     // Inventory UI
     commands.spawn((

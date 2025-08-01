@@ -11,8 +11,6 @@ use crate::components::character::LocalPlayer;
 use crate::components::character::MovementCooldown;
 use crate::plugins::attack::key_of;
 use crate::plugins::attack::AttackEvent;
-use crate::plugins::attack::AttackRegistry;
-use crate::plugins::attack::ClientAttack;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::plugins::camera::{DollyCamera, PlayerCamera};

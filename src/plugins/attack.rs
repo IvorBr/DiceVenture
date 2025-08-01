@@ -1,6 +1,5 @@
 use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
-use bevy_replicon::shared::server_entity_map::ServerEntityMap;
 use serde::{Deserialize, Serialize};
 use crate::attacks::base_attack::BaseAttackPlugin;
 use crate::attacks::counter::CounterPlugin;
@@ -100,13 +99,14 @@ impl Plugin for AttackPlugin {
 #[derive(Event, Deserialize, Serialize, MapEntities)]
 pub struct NegateDamageTrigger {
     pub attack_id: u64,
+    #[entities]
     pub owner: Entity,
+    #[entities]
     pub victim: Entity,
     pub island: u64,
     pub offset: IVec3,
     pub damage: u64,
 }
-
 
 fn damage_negated_trigger(
     trigger: Trigger<NegateDamageTrigger>,
@@ -211,7 +211,7 @@ fn client_damage_trigger(
     commands.trigger(SpawnNumberEvent {amount: damage_trigger.amount, position: damage_trigger.position, entity: damage_trigger.target()} );
 
     if damage_trigger.remaining_health == 0 {
-        if let Ok(enemy_entity) = enemies.get(damage_trigger.target()) {
+        if let Ok(_enemy_entity) = enemies.get(damage_trigger.target()) {
             // TODO: get the type of the enemy and its possible loot, xp and gold
             commands.trigger(RewardEvent {
                 items: None,

@@ -59,7 +59,6 @@ fn process_counter(
     mut commands: Commands,
 ) {
     for event in reader.read() {
-        println!("WE NOT MAKING IT HERE");
         if let Ok(entity) = counter_query.get(event.victim) {
             commands.entity(event.owner).insert(Stunned::new(10.0));
             commands.entity(entity).despawn();
