@@ -6,7 +6,7 @@ use crate::attacks::counter::CounterPlugin;
 use crate::attacks::cut_through::CutThroughPlugin;
 use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
-use crate::components::humanoid::{ActiveSkills, AttackCooldowns, Health, Stunned};
+use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::player::RewardEvent;
@@ -91,7 +91,7 @@ impl Plugin for AttackPlugin {
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
         .add_observer(damage_negated_trigger)
-        .add_systems(PreUpdate, (tick_attack_cooldowns.run_if(server_running), projectile_system, interrupt_attack_stun))
+        .add_systems(PreUpdate, (tick_attack_cooldowns.run_if(server_running), projectile_system, interrupt_attack_stun, damage_visualizer_system))
         .add_plugins((BaseAttackPlugin, CutThroughPlugin, DaggerThrowPlugin, CounterPlugin));
     }
 }
@@ -113,7 +113,6 @@ fn damage_negated_trigger(
     mut process_writer: EventWriter<NegatedDamageEvent>,
     active_skills_q: Query<&ActiveSkills>
 ){
-    println!("Mapped entities, victim: {:?}, owner {:?}", trigger.victim, trigger.owner);
     if let Ok(active_skills) = active_skills_q.get(trigger.victim){
         if let Some(skill_entity) = active_skills.0.get(&trigger.attack_id) {
             process_writer.write(NegatedDamageEvent {
@@ -155,7 +154,6 @@ fn client_visualize_attack(
         ).insert(ChildOf(server_trigger.target()))
         .id();
 
-        println!("We need to visualize for: {:?}", server_trigger.target());
         active_skills.0.insert(server_trigger.attack_id, child_entity);
 
         attack_reg.spawn(server_trigger.attack_id, &mut commands, child_entity, server_trigger.offset);
@@ -209,6 +207,12 @@ fn client_damage_trigger(
     enemies: Query<Entity, With<Enemy>>
 ){
     commands.trigger(SpawnNumberEvent {amount: damage_trigger.amount, position: damage_trigger.position, entity: damage_trigger.target()} );
+
+    commands.entity(damage_trigger.target()).insert(DamageVisualizer {
+        timer: Timer::from_seconds(0.1, TimerMode::Once),
+        flash_color: Color::WHITE,
+        original_color: None,
+    });
 
     if damage_trigger.remaining_health == 0 {
         if let Ok(_enemy_entity) = enemies.get(damage_trigger.target()) {
@@ -398,6 +402,42 @@ fn interrupt_attack_stun(
     for (attack_entity, parent) in &attacks {
         if stunned.get(parent.0).is_ok() {
             commands.entity(attack_entity).despawn();
+        }
+    }
+}
+
+fn damage_visualizer_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut DamageVisualizer, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, mut visualizer, mut transform, material_handle) in &mut query {
+        visualizer.timer.tick(time.delta());
+
+        let shake_intensity = 0.1;
+        transform.translation.x += (rand::random::<f32>() - 0.5) * shake_intensity;
+        transform.translation.y += (rand::random::<f32>() - 0.5) * shake_intensity;
+
+        if let Some(material) = materials.get_mut(material_handle.id()) {
+            if visualizer.original_color.is_none() {
+                visualizer.original_color = Some(material.base_color);
+            }
+
+            material.base_color = visualizer.flash_color;
+        }
+
+        if visualizer.timer.finished() {
+            if let Some(original) = visualizer.original_color {
+                if let Some(material) = materials.get_mut(material_handle.id()) {
+                    material.base_color = original;
+                }
+            }
+
+            transform.translation.x = transform.translation.x.round();
+            transform.translation.y = transform.translation.y.round();
+
+            commands.entity(entity).remove::<DamageVisualizer>();
         }
     }
 }

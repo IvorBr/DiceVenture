@@ -87,3 +87,17 @@ impl Stunned {
 
 #[derive(Component, Default)]
 pub struct ActiveSkills(pub HashMap<u64, Entity>);
+
+#[derive(Component)]
+pub struct DamageVisualizer {
+    pub timer: Timer,
+    pub flash_color: Color,
+    pub original_color: Option<Color>,
+}
+
+#[derive(Component, Deref, DerefMut)]
+pub struct VisualRef(pub Entity);
+
+#[derive(Component)]
+#[require(Transform)]
+pub struct VisualEntity;
