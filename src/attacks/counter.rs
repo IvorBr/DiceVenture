@@ -70,12 +70,12 @@ fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
     mut attacks: Query<(Entity, &ChildOf, &mut Counter)>,
-    mut parent_query: Query<(&Position, &mut Transform, &mut ActionState)>,
+    mut parent_query: Query<&mut ActionState>,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, mut transform, mut state)) = parent_query.get_mut(parent.0) {
+        if let Ok(mut state) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
             if attack.timer.elapsed_secs() == 0.0 {
                 commands.entity(child_entity).insert((
@@ -90,7 +90,6 @@ fn perform_attack(
             attack.timer.tick(time.delta());
 
             if attack.timer.finished() {
-                transform.translation = pos.0.as_vec3();
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;
             }

@@ -6,7 +6,7 @@ use crate::attacks::counter::CounterPlugin;
 use crate::attacks::cut_through::CutThroughPlugin;
 use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
-use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned};
+use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::player::RewardEvent;
@@ -381,7 +381,7 @@ fn projectile_system(
             }
 
             if projectile.traveled >= projectile.range as f32 {
-                commands.entity(entity).despawn(); //TODO: despawn animation?
+                commands.entity(entity).despawn(); //TODO: despawn animation
                 continue;
             }
         }
@@ -409,35 +409,38 @@ fn interrupt_attack_stun(
 fn damage_visualizer_system(
     time: Res<Time>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut DamageVisualizer, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
+    mut query: Query<(Entity, &mut DamageVisualizer, &VisualRef)>,
+    mut visuals: Query<(&mut Transform, &MeshMaterial3d<StandardMaterial>), With<VisualEntity>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    for (entity, mut visualizer, mut transform, material_handle) in &mut query {
-        visualizer.timer.tick(time.delta());
+    for (entity, mut visualizer, visual_ref) in &mut query {
+        if let Ok((mut transform, material_handle)) = visuals.get_mut(**visual_ref) {
+            visualizer.timer.tick(time.delta());
 
-        let shake_intensity = 0.1;
-        transform.translation.x += (rand::random::<f32>() - 0.5) * shake_intensity;
-        transform.translation.y += (rand::random::<f32>() - 0.5) * shake_intensity;
+            let shake_intensity = 0.1;
+            transform.translation.x += (rand::random::<f32>() - 0.5) * shake_intensity;
+            transform.translation.y += (rand::random::<f32>() - 0.5) * shake_intensity;
 
-        if let Some(material) = materials.get_mut(material_handle.id()) {
-            if visualizer.original_color.is_none() {
-                visualizer.original_color = Some(material.base_color);
-            }
-
-            material.base_color = visualizer.flash_color;
-        }
-
-        if visualizer.timer.finished() {
-            if let Some(original) = visualizer.original_color {
-                if let Some(material) = materials.get_mut(material_handle.id()) {
-                    material.base_color = original;
+            if let Some(material) = materials.get_mut(material_handle.id()) {
+                if visualizer.original_color.is_none() {
+                    visualizer.original_color = Some(material.base_color);
                 }
+
+                material.base_color = visualizer.flash_color;
             }
 
-            transform.translation.x = transform.translation.x.round();
-            transform.translation.y = transform.translation.y.round();
+            if visualizer.timer.finished() {
+                if let Some(original) = visualizer.original_color {
+                    if let Some(material) = materials.get_mut(material_handle.id()) {
+                        material.base_color = original;
+                    }
+                }
 
-            commands.entity(entity).remove::<DamageVisualizer>();
+                transform.translation.x = transform.translation.x.round();
+                transform.translation.y = transform.translation.y.round();
+
+                commands.entity(entity).remove::<DamageVisualizer>();
+            }
         }
     }
 }

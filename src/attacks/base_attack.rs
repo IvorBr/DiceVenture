@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::components::humanoid::ActionState;
+use crate::components::humanoid::{ActionState, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
@@ -55,37 +55,38 @@ fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
     mut attacks: Query<(Entity, &ChildOf, &mut BaseAttack)>,
-    mut parent_query: Query<(&Position, &mut Transform, &mut ActionState, &OnIsland)>,
+    mut parent_query: Query<(&Position, &VisualRef, &mut ActionState, &OnIsland)>,
+    mut visual_query: Query<&mut Transform, With<VisualEntity>>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, mut transform, mut state, island)) = parent_query.get_mut(parent.0) {
-            *state = ActionState::Attacking;
-            attack.timer.tick(time.delta());
+        if let Ok((pos, visual_ref, mut state, island)) = parent_query.get_mut(parent.0) {
+            if let Ok(mut transform) = visual_query.get_mut(**visual_ref) {
+                *state = ActionState::Attacking;
+                attack.timer.tick(time.delta());
 
-            let t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
-            let magnitude = if t < 0.5 {
-                t
-            } else {
-                1.0 - t
-            };
-            if !attack.hit && t >= 0.5 {
-                attack.hit = true;
-                commands.trigger(DamageEvent::new(
-                    parent.0,
-                    island.0,
-                    pos.0 + attack.direction,
-                    DAMAGE
-                ));
+                let t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
+                let magnitude = if t < 0.5 {
+                    t
+                } else {
+                    1.0 - t
+                };
+                if !attack.hit && t >= 0.5 {
+                    attack.hit = true;
+                    commands.trigger(DamageEvent::new(
+                        parent.0,
+                        island.0,
+                        pos.0 + attack.direction,
+                        DAMAGE
+                    ));
+                }
+
+                transform.translation = attack.direction.as_vec3() * magnitude * 0.5;
+
+                if attack.timer.finished() {
+                    commands.entity(child_entity).despawn();
+                    *state = ActionState::Idle;
+                }
             }
-
-            transform.translation = pos.0.as_vec3() + attack.direction.as_vec3() * magnitude * 0.5;
-
-            if attack.timer.finished() {
-                transform.translation = pos.0.as_vec3();
-                commands.entity(child_entity).despawn();
-                *state = ActionState::Idle;
-            }
-        }
-        
+        }      
     }
 }

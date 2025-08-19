@@ -49,13 +49,13 @@ fn init_enemy(
             VisualEntity,
             Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(255, 255, 255),
+                base_color: Color::srgb_u8(200, 50, 50),
                 ..Default::default()
             })),
         ))
         .id();
 
-        commands.entity(entity).add_child(visual).insert(VisualRef(visual));
+        commands.entity(entity).insert(Transform::from_xyz(position.0.x as f32, position.0.y as f32, position.0.z as f32)).add_child(visual).insert(VisualRef(visual));
 
         if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
             let mut prev_entity = entity;

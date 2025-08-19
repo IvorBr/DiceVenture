@@ -1,3 +1,4 @@
+use bevy::animation::RepeatAnimation;
 use bevy::prelude::*;
 use rand::seq::IndexedRandom;
 
@@ -8,6 +9,7 @@ use crate::components::island_maps::IslandMaps;
 use crate::components::island_maps::TerrainType;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
+use crate::plugins::animations::IdleGraph;
 use crate::plugins::network::MakeLocal;
 use crate::components::character::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
@@ -60,10 +62,10 @@ fn client_island_cleanup(
 
 fn spawn_island_player(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
     players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
     local_island_query: Query<&Island, With<LocalIsland>>,
+    assets: Res<AssetServer>,
+    
 ) {
     for (entity, position, local, island) in players.iter() {
         if let Ok(local_island) = local_island_query.single() {
@@ -80,13 +82,12 @@ fn spawn_island_player(
             ),
         ));
 
+        let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
         let visual = commands.spawn((
+            SceneRoot(scene),
             VisualEntity,
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(255, 255, 255),
-                ..Default::default()
-            })),
+            Visibility::default(),
+            AnimationPlayer::default()
         ))
         .id();
 

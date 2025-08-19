@@ -21,6 +21,7 @@ use plugins::overworld::OverworldPlugin;
 use plugins::ship::ShipPlugin;
 use rand::Rng;
 use crate::components::overworld::WorldSeed;
+use crate::plugins::animations::AnimationsPlugin;
 use crate::plugins::attack::AttackPlugin;
 use crate::plugins::damage_numbers::DamageNumbersPlugin;
 use crate::plugins::player::PlayerPlugin;
@@ -74,6 +75,7 @@ impl Plugin for AppPlugin {
             CharacterPlugin,
             EnemyPlugin,    
             HumanoidPlugin,
+            AnimationsPlugin,
 
             CameraPlugin,
             DamageNumbersPlugin,
