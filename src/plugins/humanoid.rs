@@ -4,6 +4,7 @@ use crate::components::humanoid::ActionState;
 use crate::components::humanoid::Status;
 use crate::components::humanoid::StatusFlags;
 use crate::components::humanoid::Stunned;
+use crate::components::humanoid::ViewDirection;
 use crate::components::island::OnIsland;
 use crate::components::character::LocalPlayer;
 use crate::preludes::humanoid_preludes::*;
@@ -20,7 +21,9 @@ impl Plugin for HumanoidPlugin {
         .add_systems(PreUpdate,
         (
             standard_death_check.run_if(server_running),
-            animate_movement
+            animate_movement,
+            position_changed,
+            animate_view_direction
         ).in_set(IslandSet))
         .add_systems(PreUpdate, (sync_status_flags_system, status_flags_to_actionstate_system).chain())
         .add_systems(Update, (remove_entities).after(ClientSet::Receive));
@@ -55,6 +58,23 @@ fn remove_entities(
     }
 }
 
+fn position_changed(
+    mut q: Query<(&Position, &Transform, &mut ViewDirection), Changed<Position>>,
+){
+    for (position, transform, mut view_direction) in &mut q {
+        view_direction.0 = ((transform.translation - position.0.as_vec3()) * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
+    }
+}
+
+fn animate_view_direction(
+    mut q: Query<(&ViewDirection, &mut Transform), Changed<ViewDirection>>,
+) {
+    for (view_dir, mut transform) in &mut q {
+        let target = view_dir.0.as_vec3();
+        transform.rotation = Quat::from_rotation_arc(-Vec3::Z, target);
+    }
+}
+
 fn animate_movement(
     mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState)>, 
     time: Res<Time>
@@ -66,6 +86,7 @@ fn animate_movement(
         if current.distance(target) > 0.01 {
             transform.translation = current.lerp(target, time.delta_secs() * 10.0);
             *action_state = ActionState::Moving;
+
         } else {
             transform.translation = target;
             *action_state = ActionState::Idle;

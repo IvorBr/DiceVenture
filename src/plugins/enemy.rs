@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::humanoid::{ActionState, AttackCooldowns, VisualEntity, VisualRef};
+use crate::components::humanoid::{ActionState, AttackCooldowns, ViewDirection, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::overworld::{LocalIsland, Island};
@@ -119,7 +119,8 @@ fn attack_check(
     mut commands: Commands,
     mut enemies: Query<(Entity, &Position, &mut AttackCooldowns, &Attacks, &ActionState), With<Enemy>>,
     players: Query<(Entity, &Position), With<Character>>,
-    catalog: Res<AttackCatalogue>
+    catalog: Res<AttackCatalogue>,
+    mut view_direction_q: Query<&mut ViewDirection>
 ) {
     for (enemy_entity, enemy_pos, mut cooldowns, attacks, action_state) in &mut enemies {
         // iterate over all attacks this enemy can use
@@ -138,6 +139,10 @@ fn attack_check(
 
             if let Some((_, target_pos)) = players.iter().find(|(_, pos)| spec.offsets.contains(&(pos.0 - enemy_pos.0))) {
                 let dir = target_pos.0 - enemy_pos.0;
+                
+                if let Ok(mut view_direction) = view_direction_q.get_mut(enemy_entity) {
+                    view_direction.0 = dir;
+                }
             
                 cooldowns.0.insert(*id, Timer::from_seconds(spec.cooldown, TimerMode::Once));
 

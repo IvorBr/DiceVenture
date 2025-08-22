@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, default};
 use crate::plugins::attack::AttackId;
 use bitflags::bitflags;
 
@@ -34,6 +34,15 @@ impl Default for Health {
 #[derive(Component, Serialize, Deserialize, Default)]
 pub struct Position(pub IVec3);
 
+#[derive(Component, Serialize, Deserialize)]
+pub struct ViewDirection(pub IVec3);
+
+impl Default for ViewDirection {
+    fn default() -> Self {
+        ViewDirection(-IVec3::Z)
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Event, Serialize)]
 pub struct MoveDirection(pub IVec3);
 
@@ -51,6 +60,7 @@ pub enum ActionState {
 
 #[derive(Component, Serialize, Deserialize, Default)]
 #[require(Position)]
+#[require(ViewDirection)]
 #[require(Health)]
 #[require(ActionState)]
 #[require(AttackCooldowns)]

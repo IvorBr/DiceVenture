@@ -5,6 +5,7 @@ use crate::attacks::cut_through::CutThrough;
 use crate::attacks::dagger_throw::DaggerThrow;
 use crate::components::character::PendingSkillCast;
 use crate::components::humanoid::ActionState;
+use crate::components::humanoid::ViewDirection;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
@@ -36,13 +37,14 @@ fn movement_input(
     mut move_events: EventWriter<MoveDirection>, 
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-    player: Query<&ActionState, (With<LocalPlayer>, With<Character>)>,
+    player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Character>)>,
     time: Res<Time>,
     mut cooldown: ResMut<MovementCooldown>,
+    mut view_direction_q: Query<&mut ViewDirection>
 ) {
     cooldown.timer.tick(time.delta());
 
-    let Ok(action_state) = player.single() else {
+    let Ok((entity, action_state)) = player.single() else {
         return;
     };
     
@@ -91,6 +93,10 @@ fn movement_input(
         };
     }
 
+    if let Ok(mut view_direction) = view_direction_q.get_mut(entity) {
+        view_direction.0 = -direction;
+    }
+
     if (just_pressed && cooldown.timer.elapsed_secs() >= 0.05)
         || (!just_pressed && cooldown.timer.finished())
     {
@@ -104,6 +110,7 @@ fn attack_input(
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
     player: Query<(Entity, &ActionState, Option<&PendingSkillCast>), (With<LocalPlayer>, With<Character>)>,
+    mut view_direction_q: Query<&mut ViewDirection>
 ) {
     let mut direction = IVec3::ZERO;
     let Ok((entity, action_state, skill_cast_opt)) = player.single() else {
@@ -138,6 +145,10 @@ fn attack_input(
     }
 
     if direction != IVec3::ZERO {
+        if let Ok(mut view_direction) = view_direction_q.get_mut(entity) {
+            view_direction.0 = -direction;
+        }
+
         let attack_id = key_of::<BaseAttack>();
         commands.trigger(AttackEvent::new(
             entity,
@@ -237,6 +248,7 @@ fn resolve_pending_skill_cast(
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
     mut players: Query<(Entity, &PendingSkillCast, &ActionState), With<LocalPlayer>>,
+    mut view_direction_q: Query<&mut ViewDirection>
 ) {
     for (entity, pending, action_state) in players.iter_mut() {
         if *action_state == ActionState::Stunned {
@@ -274,6 +286,10 @@ fn resolve_pending_skill_cast(
                 3 => IVec3::new(-direction.z, 0, direction.x),
                 _ => direction,
             };
+        }
+
+        if let Ok(mut view_direction) = view_direction_q.get_mut(entity) {
+            view_direction.0 = -direction;
         }
 
         commands.trigger(AttackEvent::new(

@@ -6,7 +6,7 @@ use crate::attacks::counter::CounterPlugin;
 use crate::attacks::cut_through::CutThroughPlugin;
 use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
-use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned, VisualEntity, VisualRef};
+use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned, ViewDirection, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::components::player::RewardEvent;
@@ -146,8 +146,13 @@ fn client_visualize_attack(
     server_trigger: Trigger<AttackInfo>,
     mut commands: Commands,
     attack_reg: Res<AttackRegistry>,
-    mut active_skills_q: Query<&mut ActiveSkills>
+    mut active_skills_q: Query<&mut ActiveSkills>,
+    mut view_direction_q: Query<&mut ViewDirection>
 ) {
+    if let Ok(mut view_direction) = view_direction_q.get_mut(server_trigger.target()) {
+        view_direction.0 = server_trigger.offset;
+    }
+
     if let Ok(mut active_skills) = active_skills_q.get_mut(server_trigger.target()) {
         let child_entity = commands.spawn(
             AttackMarker,
@@ -304,7 +309,7 @@ fn attack_trigger(
     attack_reg: Res<AttackRegistry>,
     attack_cat: Res<AttackCatalogue>,
     mut cooldowns_query: Query<&mut AttackCooldowns>,
-    mut active_skills_q: Query<&mut ActiveSkills>
+    mut active_skills_q: Query<&mut ActiveSkills>,
 ) {
     if let Ok(cooldowns) = &mut cooldowns_query.get_mut(attack_trigger.entity) {
         if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
