@@ -54,12 +54,12 @@ fn register_base_attack(
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
-    mut attacks: Query<(Entity, &ChildOf, &mut BaseAttack)>,
-    mut parent_query: Query<(&Position, &VisualRef, &mut ActionState, &OnIsland)>,
+    mut attacks: Query<(Entity, &ChildOf,  &mut BaseAttack)>,
+    mut parent_query: Query<(&Position, &VisualRef, &mut ActionState, &OnIsland, &GlobalTransform)>,
     mut visual_query: Query<&mut Transform, With<VisualEntity>>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, visual_ref, mut state, island)) = parent_query.get_mut(parent.0) {
+        if let Ok((pos, visual_ref, mut state, island, global_tf)) = parent_query.get_mut(parent.0) {
             if let Ok(mut transform) = visual_query.get_mut(**visual_ref) {
                 *state = ActionState::Attacking;
                 attack.timer.tick(time.delta());
@@ -80,7 +80,7 @@ fn perform_attack(
                     ));
                 }
 
-                transform.translation = attack.direction.as_vec3() * magnitude * 0.5;
+                transform.translation = global_tf.rotation().inverse() * attack.direction.as_vec3() * magnitude * 0.5;
 
                 if attack.timer.finished() {
                     commands.entity(child_entity).despawn();
