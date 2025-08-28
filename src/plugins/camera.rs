@@ -69,7 +69,7 @@ fn camera_setup(
 
     commands.spawn((
         DirectionalLight {
-            color: Color::srgb(1.0, 0.95, 0.9),
+            color: Color::srgb(1.0, 1.0, 1.0),
             illuminance: 2500.0,
             shadows_enabled: true,
             affects_lightmapped_mesh_diffuse: false, // TODO: Need to test what this effects

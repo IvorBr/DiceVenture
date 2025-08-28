@@ -65,7 +65,6 @@ fn spawn_island_player(
     players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
     local_island_query: Query<&Island, With<LocalIsland>>,
     assets: Res<AssetServer>,
-    
 ) {
     for (entity, position, local, island) in players.iter() {
         if let Ok(local_island) = local_island_query.single() {
@@ -79,7 +78,7 @@ fn spawn_island_player(
                 position.0.x as f32,
                 position.0.y as f32,
                 position.0.z as f32
-            ),
+            ).with_scale(Vec3::new(0.7, 0.7, 0.7)),
         ));
 
         let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
@@ -107,6 +106,7 @@ fn visualize_island(
     mut island_maps: ResMut<IslandMaps>,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
+    assets: Res<AssetServer>,
 ){    
     if let Ok((entity, island)) = islands.single() {
         let island_root = commands
@@ -122,48 +122,63 @@ fn visualize_island(
                     continue;
                 }
                 let position = map.chunk_to_world_coords(*pos, idx);
-                let mut color = Color::srgb(0.9, 0.8, 0.6);
-
+                let mut mesh : Handle<Mesh> = Handle::default();
+                let mut material : Handle<StandardMaterial> = Handle::default();
+                let mut offset = 0.0;
                 match tile.kind {
                     TileType::Terrain(TerrainType::Sand) => {
-                        color = Color::srgb(0.9, 0.8, 0.6);
+                        mesh = assets.load("blocks/SandBlockTest.glb#Mesh0/Primitive0").clone();
+                        material = assets.load("blocks/SandBlockTest.glb#Material0").clone();
+                        offset = 0.0;
                     }
                     TileType::Terrain(TerrainType::Rock) => {
-                        color = Color::srgb(0.49, 0.51, 0.52);
+                        mesh = assets.load("blocks/RockBlock.glb#Mesh0/Primitive0").clone();
+                        material = assets.load("blocks/RockBlock.glb#Material0").clone();
+
+                        if let Some(mat_asset) = materials.get_mut(&material) {
+                            let mut mat = mat_asset.clone();
+                            let j = rand::random_range(0.90..=1.10);
+                            let color = mat.base_color.to_linear();
+                            mat.base_color = Color::srgba(color.red * j, color.green * j, color.blue * j, color.alpha);
+                            material = materials.add(mat);
+                        }
                     }
                     TileType::Terrain(TerrainType::Boardwalk) => {
-                        color = Color::srgb_u8(88, 57, 39);
+                        mesh = assets.load("blocks/BoardWalkBlock.glb#Mesh0/Primitive0").clone();
+                        material = assets.load("blocks/BoardWalkBlock.glb#Material0").clone();
                     }
                     TileType::Terrain(TerrainType::TreeTrunk) => {
-                        color = Color::srgb_u8(88, 57, 39);
+                        mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+                        material = materials.add(StandardMaterial {base_color: Color::srgb_u8(88, 57, 39), ..Default::default()});
+
                     }
                     TileType::Terrain(TerrainType::Leaves) => {
-                        color = Color::srgb_u8(36, 80, 2);
+                        mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+                        material = materials.add(StandardMaterial {base_color: Color::srgb_u8(36, 80, 2), ..Default::default()});
+
                     }
                     _ => ()
                 }
+
                 commands.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: color,
-                        ..Default::default()
-                    })),
-                    Transform::from_xyz(position.x as f32, position.y as f32, position.z as f32),
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material),
+                    Transform::from_xyz(position.x as f32, position.y as f32 - offset, position.z as f32).with_scale(Vec3::new(1.0, 1.0, 1.0)),
                 )).insert(ChildOf(island_root));
             }
         }
 
-        let shoreline_tiles: Vec<IVec3> = map.shore_tiles();
-        for tile in shoreline_tiles.iter() {
-            commands.spawn((
-                Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
-                MeshMaterial3d(materials.add(StandardMaterial {
-                    base_color: Color::srgb(1.0, 1.0, 0.6),
-                    ..Default::default()
-                })),
-                Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
-            )).insert(ChildOf(island_root));
-        }
+        // let shoreline_tiles: Vec<IVec3> = map.shore_tiles();
+        // for tile in shoreline_tiles.iter() {
+        //     commands.spawn((
+        //         Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
+        //         MeshMaterial3d(materials.add(StandardMaterial {
+        //             base_color: Color::srgb(1.0, 1.0, 0.6),
+        //             ..Default::default()
+        //         })),
+        //         Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
+        //     )).insert(ChildOf(island_root));
+        // }
         commands.entity(entity).remove::<VisualizeIsland>();
     }
 }  

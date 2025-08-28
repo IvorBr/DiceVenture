@@ -67,27 +67,27 @@ fn setup_island_server(
             let mut generator = StdRng::seed_from_u64(island_id.0);
             
             let top_tiles = map.above_water_top_tiles();
-            for _ in 0..5 {
-                let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
-                let enemy_id = commands
-                    .spawn((
-                        Enemy,
-                        STANDARD_MOVE,
-                        Attacks(vec![key_of::<BaseAttack>()]),
-                        AttackCooldowns::default(),
-                        EnemyState::Idle,
-                        Position(enemy_pos),
-                        MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
-                        OnIsland(island_id.0),
-                        RangeAggro(8)
-                    ))
-                    .id();
+            // for _ in 0..5 {
+            //     let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
+            //     let enemy_id = commands
+            //         .spawn((
+            //             Enemy,
+            //             STANDARD_MOVE,
+            //             Attacks(vec![key_of::<BaseAttack>()]),
+            //             AttackCooldowns::default(),
+            //             EnemyState::Idle,
+            //             Position(enemy_pos),
+            //             MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
+            //             OnIsland(island_id.0),
+            //             RangeAggro(8)
+            //         ))
+            //         .id();
 
-                map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
-                map.enemy_count += 1;
+            //     map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+            //     map.enemy_count += 1;
 
-                commands.entity(entity).insert(EliminationObjective);
-            }
+            //     commands.entity(entity).insert(EliminationObjective);
+            // }
         }
 
         commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();

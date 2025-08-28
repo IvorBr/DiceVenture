@@ -35,6 +35,7 @@ enum GameState {
 }
 
 pub const CHUNK_SIZE : i32 = 16;
+pub const POSITION_SIZE : f32 = 1.0;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct IslandSet;

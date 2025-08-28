@@ -2,9 +2,11 @@ use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
-use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, Interruptable, Projectile};
+use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, Interruptable};
+use crate::plugins::projectiles::Projectile;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
+use crate::attacks::core::check_attack_path;
 
 const DAMAGE: u64 = 8;
 const ATTACK_RANGE : u8 = 8;
@@ -68,8 +70,17 @@ fn perform_attack(
             *state = ActionState::Attacking;
             attack.timer.tick(time.delta());
 
-            if island_maps.get_map(island.0).is_some() && !attack.hit {
+            if island_maps.get_map(island.0).is_some() && !attack.hit { //TODO: using attack.hit to ensure only one projectile is spawned, not ideal but works for now
                 attack.hit = true;
+                
+
+                let attack_direction = check_attack_path(
+                    IVec3::new(pos.0.x, pos.0.y, pos.0.z),
+                    attack.direction,
+                    ATTACK_RANGE,
+                    island_maps.get_map(island.0).unwrap()
+                );
+
                 commands.spawn((
                     Mesh3d(meshes.add(Cuboid::new(0.3, 0.3, 0.3))),
                     MeshMaterial3d(materials.add(StandardMaterial {
@@ -80,11 +91,11 @@ fn perform_attack(
                         owner: parent.0,
                         traveled: 0.0,
                         range: ATTACK_RANGE,
-                        direction: Vec3::new(attack.direction.x as f32, attack.direction.y as f32, attack.direction.z as f32),
-                        speed: 1.0,
+                        direction: attack_direction, //Vec3::new(attack.direction.x as f32, attack.direction.y as f32, attack.direction.z as f32),
+                        speed: 16.0,
                         damage: DAMAGE
                     },
-                    Transform::from_translation(transform.translation),
+                    Transform::from_xyz(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32),
                     OnIsland(island.0)
                 ));
             }
