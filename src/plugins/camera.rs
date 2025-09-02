@@ -72,7 +72,7 @@ fn camera_setup(
             color: Color::srgb(1.0, 1.0, 1.0),
             illuminance: 2500.0,
             shadows_enabled: true,
-            affects_lightmapped_mesh_diffuse: false, // TODO: Need to test what this effects
+            affects_lightmapped_mesh_diffuse: true, // TODO: Need to test what this affects
             shadow_depth_bias: DirectionalLight::DEFAULT_SHADOW_DEPTH_BIAS,
             shadow_normal_bias: DirectionalLight::DEFAULT_SHADOW_NORMAL_BIAS,
         },

@@ -31,11 +31,11 @@ impl Material for WaterMaterial {
         AlphaMode::Blend
     }
     fn fragment_shader() -> ShaderRef {
-        "shaders/water_shader.wgsl".into()
+        "shaders/water.wgsl".into()
     }
 
     fn vertex_shader() -> ShaderRef {
-        "shaders/water_shader.wgsl".into()
+        "shaders/water.wgsl".into()
     }
 }
 

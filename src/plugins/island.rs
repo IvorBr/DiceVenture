@@ -124,12 +124,12 @@ fn visualize_island(
                 let position = map.chunk_to_world_coords(*pos, idx);
                 let mut mesh : Handle<Mesh> = Handle::default();
                 let mut material : Handle<StandardMaterial> = Handle::default();
-                let mut offset = 0.0;
+                let mut scale : Vec3 = Vec3::ONE;
+
                 match tile.kind {
                     TileType::Terrain(TerrainType::Sand) => {
                         mesh = assets.load("blocks/SandBlockTest.glb#Mesh0/Primitive0").clone();
                         material = assets.load("blocks/SandBlockTest.glb#Material0").clone();
-                        offset = 0.0;
                     }
                     TileType::Terrain(TerrainType::Rock) => {
                         mesh = assets.load("blocks/RockBlock.glb#Mesh0/Primitive0").clone();
@@ -147,10 +147,9 @@ fn visualize_island(
                         mesh = assets.load("blocks/BoardWalkBlock.glb#Mesh0/Primitive0").clone();
                         material = assets.load("blocks/BoardWalkBlock.glb#Material0").clone();
                     }
-                    TileType::Terrain(TerrainType::TreeTrunk) => {
-                        mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-                        material = materials.add(StandardMaterial {base_color: Color::srgb_u8(88, 57, 39), ..Default::default()});
-
+                    TileType::Terrain(TerrainType::PalmTree) => {
+                        mesh = assets.load("blocks/PalmTreeTrunkBlock.glb#Mesh0/Primitive0").clone();
+                        material = assets.load("blocks/PalmTreeTrunkBlock.glb#Material0").clone();
                     }
                     TileType::Terrain(TerrainType::Leaves) => {
                         mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
@@ -163,7 +162,7 @@ fn visualize_island(
                 commands.spawn((
                     Mesh3d(mesh),
                     MeshMaterial3d(material),
-                    Transform::from_xyz(position.x as f32, position.y as f32 - offset, position.z as f32).with_scale(Vec3::new(1.0, 1.0, 1.0)),
+                    Transform::from_xyz(position.x as f32, position.y as f32, position.z as f32).with_scale(scale),
                 )).insert(ChildOf(island_root));
             }
         }

@@ -2,12 +2,9 @@
 use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
-use crate::attacks::base_attack::BaseAttack;
-use crate::components::humanoid::{AttackCooldowns, Position};
-use crate::components::enemy::{Attacks, Enemy, EnemyState, MoveTimer, RangeAggro, STANDARD_MOVE};
-use crate::components::island::{CompletedIslandObjective, EliminationObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland, OnIsland};
+
+use crate::components::island::{CompletedIslandObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland};
 use crate::components::overworld::Island;
-use crate::plugins::attack::key_of;
 use crate::preludes::network_preludes::*;
 
 use rand::rngs::StdRng;
@@ -143,30 +140,16 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
     add_boardwalk(map, &mut reserved_positions, generator);
 
     //add trees
-    let num_trees = generator.random_range(3..=6);
+    let num_trees = generator.random_range(5..=10);
     for _ in 0..num_trees {
         if let Some(&base) = top_tiles.choose(generator) {
             if reserved_positions.contains(&base) { continue; }
-
-            let height = generator.random_range(2..=4);
+            let base_pos = base + IVec3::Y;
+            let height = generator.random_range(3..=4);
             let mut tree_positions = vec![];
 
-            // Trunk
             for i in 0..height {
-                tree_positions.push(base + IVec3::new(0, i, 0));
-            }
-
-            // Leaves
-            let leaf_size = generator.random_range(2..=3);
-            let leaf_min = -(leaf_size / 2);
-            let leaf_max = leaf_min + leaf_size - 1;
-
-            for dx in leaf_min..=leaf_max {
-                for dy in 0..=1 {
-                    for dz in leaf_min..=leaf_max {
-                        tree_positions.push(base + IVec3::new(dx, height + dy, dz));
-                    }
-                }
+                tree_positions.push(base_pos + IVec3::new(0, i, 0));
             }
 
             if tree_positions.iter().any(|p| reserved_positions.contains(p)) {
@@ -174,10 +157,10 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
             }
             
             for pos in tree_positions.iter() {
-                let terrain = if pos.y < base.y + height {
-                    TerrainType::TreeTrunk
+                let terrain = if pos.y != base_pos.y + (height)/2 - 1 {
+                    TerrainType::Invisible
                 } else {
-                    TerrainType::Leaves
+                    TerrainType::PalmTree
                 };
 
                 map.add_entity_ivec3(

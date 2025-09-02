@@ -26,9 +26,11 @@ impl IslandMaps {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum TerrainType {
+    Invisible,
     Sand,
     Rock,
     Boardwalk,
+    PalmTree,
     TreeTrunk,
     Leaves
 }
