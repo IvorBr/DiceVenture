@@ -119,16 +119,16 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
 
             if value > threshold {
                 let mut height = ((value - threshold) * 10.0).ceil() as i32; //need to be optimized to only spawn seeable parts, can simply check for neighbours
-                if height > 3 {
+                if height > 3 {     // no tiles higher than 3 on islands
                     height = 3;
                 }
-                for y in 0..height {
+                for y in 0..height { // fill in tiles below above tile
                     tile = IVec3::new(x, y, z) + center_offset;
                     map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
                 }
-            } else {
-                tile = IVec3::new(x, value.floor() as i32, z) + center_offset;
-                map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
+            } else { // underwater terrain 
+                // tile = IVec3::new(x, (value * 10.0).ceil() as i32, z) + center_offset;
+                // map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
 
             }
         }

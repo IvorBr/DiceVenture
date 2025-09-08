@@ -1,27 +1,26 @@
 use bevy::prelude::*;
+use bevy::render::view::RenderLayers;
 use crate::components::island::{EnteredIsland, GenerateIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
 use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
-use crate::plugins::camera::{CameraTarget, NewCameraTarget};
+use crate::plugins::camera::{CameraColorImage, CameraTarget, NewCameraTarget, LAYER_WATER};
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+#[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct WaterMaterial {
-    pub random_number: i32,
     #[texture(1)]
     #[sampler(2)]
-    pub depth_texture: Handle<Image>,
+    pub world_texture: Handle<Image>,
 }
 
 impl Default for WaterMaterial {
     fn default() -> Self {
         Self {
-            random_number: 0,
-            depth_texture: Handle::default()
+            world_texture: default(),
         }
     }
 }
@@ -39,6 +38,7 @@ impl Material for WaterMaterial {
     }
 }
 
+pub const WATER_HEIGHT : f32 = 0.3;
 pub struct OverworldPlugin;
 
 impl Plugin for OverworldPlugin {
@@ -145,7 +145,8 @@ fn spawn_overworld(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     overworld_query: Query<&OverworldRoot>,
-    world_seed: Res<WorldSeed>
+    world_seed: Res<WorldSeed>,
+    world_texture: Res<CameraColorImage>
 ) {
     println!("spawning {}", world_seed.0);
     if overworld_query.single().is_ok() {
@@ -163,12 +164,14 @@ fn spawn_overworld(
     // ocean
     commands
         .spawn((
-            Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(500))),
+            Mesh3d(meshes.add(Plane3d::default().mesh().size(75.0, 75.0).subdivisions(500))),
             MeshMaterial3d(water_materials.add(WaterMaterial {
+                world_texture: world_texture.0.clone(),
                 ..Default::default()
             })),
-            Transform::from_xyz(0.0, 0.3, 0.0),
+            Transform::from_xyz(0.0, WATER_HEIGHT, 0.0),
             Ocean,
+            RenderLayers::layer(LAYER_WATER.into()),
         ))
         .observe(on_clicked_ocean);
 

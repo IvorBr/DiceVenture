@@ -1,6 +1,7 @@
 use dolly::prelude::*;
-use bevy::prelude::*;
+use bevy::{asset::RenderAssetUsages, prelude::*};
 use mint::{Quaternion, Point3};
+use bevy::render::render_resource::*;
 
 #[derive(Component)]
 pub struct PlayerCamera;
@@ -16,6 +17,13 @@ pub struct DollyCamera {
     pub rig: CameraRig,
     pub direction: u8
 }
+
+#[derive(Component)]
+pub struct RenderCamera;
+
+
+pub const LAYER_WORLD: u8 = 0;
+pub const LAYER_WATER: u8 = 1;
 
 impl DollyCamera {
     pub fn new(rotation: Quat) -> Self {
@@ -46,33 +54,21 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(Startup, camera_setup)
+        .add_systems(Startup, ((create_shader_resources, setup_cameras, setup_light).chain()))
         .add_systems(PreUpdate, change_camera_target)
-        .add_systems(Update, (follow_target, rotate_camera, update));
+        .add_systems(Update, (follow_target, rotate_camera, (update_camera, update_render_camera).chain()));
     }
 }
 
-fn camera_setup(
-    mut commands: Commands
+fn setup_light(
+    mut commands: Commands,
 ) {
-    let transform = Transform::from_xyz(0.0, 12.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
-    let rotation = transform.rotation;
-
-    commands.spawn((
-        PlayerCamera,
-        DollyCamera::new(rotation),
-        Camera3d {
-            ..default()
-        },
-        transform
-    ));
-
     commands.spawn((
         DirectionalLight {
             color: Color::srgb(1.0, 1.0, 1.0),
             illuminance: 2500.0,
             shadows_enabled: true,
-            affects_lightmapped_mesh_diffuse: true, // TODO: Need to test what this affects
+            affects_lightmapped_mesh_diffuse: true,
             shadow_depth_bias: DirectionalLight::DEFAULT_SHADOW_DEPTH_BIAS,
             shadow_normal_bias: DirectionalLight::DEFAULT_SHADOW_NORMAL_BIAS,
         },
@@ -81,14 +77,6 @@ fn camera_setup(
             ..default()
         },
     ));
-
-    // commands.spawn(DistanceFog {
-    //     color: Color::srgb(0.8, 0.85, 1.0),
-    //     directional_light_color: Color::srgba(1.0, 0.98, 0.9, 0.3),
-    //     directional_light_exponent: 10.0,
-    //     falloff: FogFalloff::Exponential { density: 0.01 },
-    // });
-    
 }
 
 fn change_camera_target(
@@ -144,7 +132,7 @@ pub fn rotate_camera(
     }
 }
 
-pub fn update(
+pub fn update_camera(
     mut query: Query<(&mut Transform, &mut DollyCamera)>, 
     time: Res<Time>
 ) {
@@ -154,5 +142,99 @@ pub fn update(
         let dolly_rot = dolly_cam.rig.final_transform.rotation;
         transform.translation = Vec3::new(dolly_pos.x, dolly_pos.y, dolly_pos.z);
         transform.rotation = Quat::from_xyzw(dolly_rot.v.x, dolly_rot.v.y, dolly_rot.v.z, dolly_rot.s);
+    }
+}
+
+#[derive(Resource, Clone)]
+pub struct CameraColorImage(pub Handle<Image>);
+
+fn create_shader_resources(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let size = Extent3d {
+        width:  1920,
+        height: 1080,
+        depth_or_array_layers: 1,
+    };
+
+    // color texture
+    let mut color = Image::new_fill(
+        size,
+        TextureDimension::D2,
+        &[0u8; 8],
+        TextureFormat::Rgba16Float,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    color.texture_descriptor.usage = TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING;
+
+    let color_h = images.add(color);
+    commands.insert_resource(CameraColorImage(color_h));
+}
+
+use bevy::render::view::RenderLayers;
+
+use crate::plugins::overworld::WATER_HEIGHT;
+
+fn setup_cameras(mut commands: Commands, capture: Res<CameraColorImage>) {
+    // Camera 0: world to offscreen images
+    commands.spawn((
+        Camera {
+            order: 0,
+            target: bevy::render::camera::RenderTarget::Image(capture.0.clone().into()),
+            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            ..default()
+        },
+        Camera3d {
+            ..default()
+        },
+        RenderLayers::layer(LAYER_WORLD.into()),
+        RenderCamera
+    ));
+
+    // Camera 1: water and world to screen
+    let transform = Transform::from_xyz(0.0, 12.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
+    let rotation = transform.rotation;
+
+    commands.spawn((
+        PlayerCamera,
+        DollyCamera::new(rotation),
+        Camera {
+            order : 1,
+            ..default()
+        },
+        Camera3d {
+            depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(),
+            ..default()
+        },
+        RenderLayers::from_layers(&[LAYER_WORLD as usize, LAYER_WATER as usize]),
+
+        transform
+    ));
+}
+
+pub fn update_render_camera(
+    main_query: Query<&Transform, (With<PlayerCamera>, Without<RenderCamera>)>,
+    mut capture_query: Query<&mut Transform, (With<RenderCamera>, Without<PlayerCamera>)>,
+) {
+    if let (Ok(main_transform), Ok(mut capture_transform)) = (main_query.single(), capture_query.single_mut()) {
+        let mut projection = main_transform.translation;
+        projection.y = 2.0 * WATER_HEIGHT - projection.y;
+
+        let forward = main_transform.forward();
+        let up = main_transform.up();
+        let forward_mirrored = Vec3::new(forward.x, -forward.y, forward.z).normalize();
+        let mut up_mirrored = Vec3::new(up.x, -up.y, up.z).normalize();
+
+        let right_mirrored = forward_mirrored.cross(up_mirrored).normalize();
+        up_mirrored = right_mirrored.cross(forward_mirrored).normalize();
+
+        let rot = Quat::from_mat3(&Mat3::from_cols(right_mirrored, up_mirrored, -forward_mirrored));
+
+        *capture_transform = Transform {
+            translation: projection,
+            rotation: rot,
+            scale: Vec3::new(1.0,1.0,1.0),
+        };
     }
 }

@@ -6,15 +6,9 @@
 
 #import "shaders/noise.wgsl"::simplex_noise2;
 
-struct WaterMaterialUniform {
-    random_num: i32
-};
 
-@group(2) @binding(0)
-var<uniform> water: WaterMaterialUniform;
-
-@group(2) @binding(1) var depth_texture: texture_2d<f32>;
-@group(2) @binding(2) var depth_sampler: sampler;
+@group(2) @binding(1) var terrain_texture: texture_2d<f32>;
+@group(2) @binding(2) var terrain_sampler: sampler;
 
 struct VertexInput {
     @builtin(instance_index) instance_index: u32,
@@ -91,24 +85,41 @@ fn vertex(input: VertexInput) -> VertexOutput {
 
 const DEBUG = false;
 
+fn ndc_to_uv(ndc_xy: vec2<f32>) -> vec2<f32> {
+    let uv = ndc_xy * 0.5 + 0.5;
+    return vec2<f32>(uv.x, 1.0 - uv.y);
+}
+
+fn screen_uv_from_clip(clip: vec4<f32>) -> vec2<f32> {
+    let ndc = clip.xy / clip.w;                     // [-1,1]
+    let uv  = ndc * 0.5 + vec2<f32>(0.5, 0.5);      // [0,1]
+    // if the image is upside-down, flip Y here:
+    // return vec2<f32>(uv.x, 1.0 - uv.y);
+    return uv;
+}
+
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-    var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
-    var peakColor = vec3<f32>(1.0, 1.0, 1.0);
-    
-    let elevation = getElevation(input.world_pos.x, input.world_pos.z);
-    let highlight = smoothstep(0.28, 0.36, elevation);   
-    let boosted_highlight = elevation * mix(1.0, 4.0, highlight);                    
-    let final_sub_mul = (boosted_highlight - 0.1) * 0.2;
-
-    let elevationFactor = final_sub_mul;
-
-    if DEBUG {
-        surfaceColor = vec3<f32>(0.0, 0.0, 0.0);
-        peakColor = vec3<f32>(1.0, 1.0, 1.0);
-    }
-
-    let color = mix(surfaceColor, peakColor, elevationFactor);
-
-    return vec4<f32>(color, 1.0);
+    let uv = screen_uv_from_clip(input.clip_position);
+    // DEBUG: show the capture texture
+    let c = textureSampleLevel(terrain_texture, terrain_sampler, input.world_pos.xz, 0.0);
+    // If RGB looks dark because you clear to transparent, try viewing alpha:
+    // return vec4(c.aaa, 1.0);
+    return vec4(c.rgb, 1.0);
 }
+
+// @fragment
+// fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
+//     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
+//     var peakColor = vec3<f32>(1.0, 1.0, 1.0);
+
+//     let elevation = getElevation(input.world_pos.x, input.world_pos.z);
+//     let highlight = smoothstep(0.28, 0.36, elevation);
+//     let boosted = elevation * mix(1.0, 4.0, highlight);
+//     let elevationFactor = (boosted - 0.1) * 0.35;
+
+//     if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
+//     var color = mix(surfaceColor, peakColor, elevationFactor);
+
+//     return vec4(color, 0.92);
+// }
