@@ -6,9 +6,13 @@
 
 #import "shaders/noise.wgsl"::simplex_noise2;
 
-
+@group(2) @binding(0) var<uniform> reflection: ReflectionParams;
 @group(2) @binding(1) var terrain_texture: texture_2d<f32>;
 @group(2) @binding(2) var terrain_sampler: sampler;
+
+struct ReflectionParams {
+    clip_from_world: mat4x4<f32>,
+}
 
 struct VertexInput {
     @builtin(instance_index) instance_index: u32,
@@ -85,27 +89,16 @@ fn vertex(input: VertexInput) -> VertexOutput {
 
 const DEBUG = false;
 
-fn ndc_to_uv(ndc_xy: vec2<f32>) -> vec2<f32> {
-    let uv = ndc_xy * 0.5 + 0.5;
-    return vec2<f32>(uv.x, 1.0 - uv.y);
-}
-
-fn screen_uv_from_clip(clip: vec4<f32>) -> vec2<f32> {
-    let ndc = clip.xy / clip.w;                     // [-1,1]
-    let uv  = ndc * 0.5 + vec2<f32>(0.5, 0.5);      // [0,1]
-    // if the image is upside-down, flip Y here:
-    // return vec2<f32>(uv.x, 1.0 - uv.y);
-    return uv;
-}
-
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-    let uv = screen_uv_from_clip(input.clip_position);
-    // DEBUG: show the capture texture
-    let c = textureSampleLevel(terrain_texture, terrain_sampler, input.world_pos.xz, 0.0);
-    // If RGB looks dark because you clear to transparent, try viewing alpha:
-    // return vec4(c.aaa, 1.0);
-    return vec4(c.rgb, 1.0);
+    // Project water world pos into the reflection camera
+    let clip = position_world_to_clip(input.world_pos);//reflection.clip_from_world * vec4<f32>(input.world_pos, 1.0);
+    let ndc = clip.xy / clip.w;
+
+    var uv = ndc * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+    let col = textureSample(terrain_texture, terrain_sampler, uv);
+    
+    return col;
 }
 
 // @fragment

@@ -6,36 +6,38 @@ use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraColorImage, CameraTarget, NewCameraTarget, LAYER_WATER};
-use bevy::render::render_resource::{AsBindGroup, ShaderRef};
+use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
+#[derive(ShaderType, Clone, Copy, Default)]
+pub struct ReflectionUniform {
+    pub clip_from_world: Mat4,
+}
+
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct WaterMaterial {
+    #[uniform(0)]
+    pub reflection: ReflectionUniform,
+
     #[texture(1)]
     #[sampler(2)]
-    pub world_texture: Handle<Image>,
+    pub world_texture: Option<Handle<Image>>,
 }
 
 impl Default for WaterMaterial {
     fn default() -> Self {
         Self {
+            reflection: ReflectionUniform::default(),
             world_texture: default(),
         }
     }
 }
 
 impl Material for WaterMaterial {
-    fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Blend
-    }
-    fn fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
-    }
-
-    fn vertex_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
-    }
+    fn alpha_mode(&self) -> AlphaMode { AlphaMode::Blend }
+    fn fragment_shader() -> ShaderRef { "shaders/water.wgsl".into() }
+    fn vertex_shader() -> ShaderRef { "shaders/water.wgsl".into() }
 }
 
 pub const WATER_HEIGHT : f32 = 0.3;
@@ -166,7 +168,7 @@ fn spawn_overworld(
         .spawn((
             Mesh3d(meshes.add(Plane3d::default().mesh().size(75.0, 75.0).subdivisions(500))),
             MeshMaterial3d(water_materials.add(WaterMaterial {
-                world_texture: world_texture.0.clone(),
+                world_texture: Some(world_texture.0.clone()),
                 ..Default::default()
             })),
             Transform::from_xyz(0.0, WATER_HEIGHT, 0.0),

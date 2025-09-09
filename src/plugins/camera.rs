@@ -1,5 +1,5 @@
 use dolly::prelude::*;
-use bevy::{asset::RenderAssetUsages, prelude::*};
+use bevy::{asset::RenderAssetUsages, prelude::*, render::camera::CameraProjection};
 use mint::{Quaternion, Point3};
 use bevy::render::render_resource::*;
 
@@ -56,7 +56,7 @@ impl Plugin for CameraPlugin {
         app
         .add_systems(Startup, ((create_shader_resources, setup_cameras, setup_light).chain()))
         .add_systems(PreUpdate, change_camera_target)
-        .add_systems(Update, (follow_target, rotate_camera, (update_camera, update_render_camera).chain()));
+        .add_systems(Update, (follow_target, rotate_camera, (update_camera, update_render_camera, update_reflection_uniform).chain()));
     }
 }
 
@@ -173,10 +173,9 @@ fn create_shader_resources(
 }
 
 use bevy::render::view::RenderLayers;
+use crate::plugins::overworld::{WaterMaterial, WATER_HEIGHT};
 
-use crate::plugins::overworld::WATER_HEIGHT;
-
-fn setup_cameras(mut commands: Commands, capture: Res<CameraColorImage>) {
+fn setup_cameras(mut commands: Commands, capture: ResMut<CameraColorImage>) {
     // Camera 0: world to offscreen images
     commands.spawn((
         Camera {
@@ -234,7 +233,22 @@ pub fn update_render_camera(
         *capture_transform = Transform {
             translation: projection,
             rotation: rot,
-            scale: Vec3::new(1.0,1.0,1.0),
+            scale: Vec3::ONE,
         };
+    }
+}
+
+pub fn update_reflection_uniform(
+    capture_query: Query<(&GlobalTransform, &Projection), With<RenderCamera>>,
+    mut mats: ResMut<Assets<WaterMaterial>>,
+) {
+    if let Ok((capture_transform, cap_projection)) = capture_query.single() {
+        let view = capture_transform.compute_matrix().inverse();
+        let projection = cap_projection.get_clip_from_view();
+        let clip_from_world = projection * view;
+
+        for (_handle, material) in mats.iter_mut() {
+            material.reflection.clip_from_world = clip_from_world;
+        }
     }
 }
