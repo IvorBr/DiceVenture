@@ -101,15 +101,13 @@ fn follow_target(
     target_query: Query<(Option<&crate::components::humanoid::Position>, &Transform), (With<CameraTarget>, Without<PlayerCamera>)>,
     time: Res<Time>          
 ) {
-    if let Ok((maybe_pos, transform)) = target_query.single() {
+    if let Ok((target_position, target_transform)) = target_query.single() {
         if let Ok(mut dolly_cam) = camera.single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            let follow_pos = maybe_pos
-                .map(|p| p.0.as_vec3())
-                .unwrap_or(transform.translation);
+            let follow_pos = target_position.map(|p| p.0.as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
             
-            let cur : Vec3 = Vec3::new(pos_driver.position.x, pos_driver.position.y, pos_driver.position.z);
-            let new_pos = cur.lerp(follow_pos, time.delta_secs() * 15.0);
+            let current: Vec3 = Vec3::new(pos_driver.position.x, pos_driver.position.y, pos_driver.position.z);
+            let new_pos = current.lerp(follow_pos, time.delta_secs() * 15.0);
 
             pos_driver.position = new_pos.to_array().into();
         }
@@ -164,7 +162,7 @@ fn create_shader_resources(
         TextureDimension::D2,
         &[0u8; 8],
         TextureFormat::Rgba16Float,
-        RenderAssetUsages::RENDER_WORLD,
+        RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
     );
     color.texture_descriptor.usage = TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING;
 
@@ -188,7 +186,7 @@ fn setup_cameras(mut commands: Commands, capture: ResMut<CameraColorImage>) {
             ..default()
         },
         RenderLayers::layer(LAYER_WORLD.into()),
-        RenderCamera
+        RenderCamera,
     ));
 
     // Camera 1: water and world to screen
@@ -217,24 +215,16 @@ pub fn update_render_camera(
     mut capture_query: Query<&mut Transform, (With<RenderCamera>, Without<PlayerCamera>)>,
 ) {
     if let (Ok(main_transform), Ok(mut capture_transform)) = (main_query.single(), capture_query.single_mut()) {
-        let mut projection = main_transform.translation;
-        projection.y = 2.0 * WATER_HEIGHT - projection.y;
+        let mut mirrored_position = main_transform.translation;
+        mirrored_position.y = 2.0 * WATER_HEIGHT - mirrored_position.y;
 
         let forward = main_transform.forward();
         let up = main_transform.up();
-        let forward_mirrored = Vec3::new(forward.x, -forward.y, forward.z).normalize();
-        let mut up_mirrored = Vec3::new(up.x, -up.y, up.z).normalize();
+        
+        let forward_mirrored = Vec3::new(forward.x, -forward.y, forward.z);
+        let up_mirrored = Vec3::new(up.x, -up.y, up.z);
 
-        let right_mirrored = forward_mirrored.cross(up_mirrored).normalize();
-        up_mirrored = right_mirrored.cross(forward_mirrored).normalize();
-
-        let rot = Quat::from_mat3(&Mat3::from_cols(right_mirrored, up_mirrored, -forward_mirrored));
-
-        *capture_transform = Transform {
-            translation: projection,
-            rotation: rot,
-            scale: Vec3::ONE,
-        };
+        *capture_transform = Transform::from_translation(mirrored_position).looking_to(forward_mirrored, up_mirrored);
     }
 }
 
@@ -246,7 +236,6 @@ pub fn update_reflection_uniform(
         let view = capture_transform.compute_matrix().inverse();
         let projection = cap_projection.get_clip_from_view();
         let clip_from_world = projection * view;
-
         for (_handle, material) in mats.iter_mut() {
             material.reflection.clip_from_world = clip_from_world;
         }

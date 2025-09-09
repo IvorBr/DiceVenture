@@ -89,18 +89,21 @@ fn vertex(input: VertexInput) -> VertexOutput {
 
 const DEBUG = false;
 
+
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-    // Project water world pos into the reflection camera
-    let clip = position_world_to_clip(input.world_pos);//reflection.clip_from_world * vec4<f32>(input.world_pos, 1.0);
-    let ndc = clip.xy / clip.w;
-
-    var uv = ndc * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
-    let col = textureSample(terrain_texture, terrain_sampler, uv);
+    // Project water world pos into the reflection camera's clip space
+    let clip = reflection.clip_from_world * vec4<f32>(input.world_pos, 1.0);
     
-    return col;
+    // Perspective divide to get NDC coordinates
+    let ndc = clip.xy / clip.w;
+    let uv = ndc * vec2(0.5, -0.5) + vec2(0.5);
+    
+    // Sample the reflection texture
+    let reflection_color = textureSample(terrain_texture, terrain_sampler, uv);
+    
+    return reflection_color;
 }
-
 // @fragment
 // fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
 //     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
