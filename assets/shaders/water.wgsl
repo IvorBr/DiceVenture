@@ -81,22 +81,20 @@ fn vertex(input: VertexInput) -> VertexOutput {
     return out;
 }
 
-const DEBUG = true;
+const DEBUG = false;
 
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     // Base water color
     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
     var peakColor = vec3<f32>(1.0, 1.0, 1.0);
-    if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
 
-    // Highlights
     let elevation = getElevation(input.world_pos.x, input.world_pos.z);
     let highlight = smoothstep(0.28, 0.36, elevation);
     let boosted = elevation * mix(1.0, 4.0, highlight);
     let elevationFactor = (boosted - 0.1) * 0.35;
 
-    
+    if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
     var color = mix(surfaceColor, peakColor, elevationFactor);
 
     // Reflection
@@ -106,14 +104,33 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     uv.y = 1.0 - uv.y;
 
     let refl = textureSample(terrain_texture, terrain_sampler, uv);
-    let final_rgb = color + refl.rgb;
+    let viewDir = normalize(view.world_position - input.world_pos);
+    let ndotv = max(dot(input.normal, viewDir), 0.0);
+
+    let N = normalize(input.normal);
+    let V = normalize(view.world_position - input.world_pos);
+    let ndv = clamp(dot(N, V), 0.0, 1.0);
+
+    let base_refl = 0.8;   // reflection when looking straight down (tune 0.1–0.35)
+    let grazing_boost = 0.80; // how much extra at grazing (tune 0.5–1.0)
+    let power = 3.0;    // curve sharpness (2–5 looks good)
+
+    let fresnel_like = base_refl + grazing_boost * pow(1.0 - ndv, power);
+    var weight = clamp(fresnel_like, 0.0, 1.0);
+    weight *= 0.8 + 0.2 * saturate(1.0 - abs(N.y)); 
+
+    let mask = weight * refl.a;
+
+    let final_rgb = mix(color, refl.rgb, mask);
     return vec4(final_rgb, 1.0);
 }
 
 
-// Still need to:
+// Still need to add
 // Add foam at the waterlines using depth buffer
-// Depth based opacity of objects in the water
+// Depth-based opacity
+// let opacity = mix(0.7, 1.0, fresnel); // More transparent when looking down
 // Add slight color tint to reflections for more realistic water
+// finalColor = mix(finalColor, finalColor * vec3(0.9, 0.95, 1.0), 0.1);
 // Boost contrast slightly for more vibrant look
 // finalColor = pow(finalColor, vec3(0.95));
