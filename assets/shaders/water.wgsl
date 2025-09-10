@@ -58,64 +58,62 @@ fn getElevation(x: f32, z: f32) -> f32 {
 fn vertex(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
 
-    var world_from_local = get_world_from_local(input.instance_index);
-    var world_pos : vec3<f32> = mesh_position_local_to_world(world_from_local, vec4<f32>(input.position, 1.0)).xyz;
+    let world_from_local = get_world_from_local(input.instance_index);
+    var wp = mesh_position_local_to_world(world_from_local, vec4<f32>(input.position, 1.0)).xyz;
 
-    let elevation = getElevation(world_pos.x, world_pos.z) * 0.1;
-    world_pos.y += elevation;
+    let amp = 0.1;
+    let e0 = getElevation(wp.x, wp.z) * amp;
+    wp.y += e0;
 
-    let eps: f32 = 0.001;
-    let tangent = normalize(vec3<f32>(
-        eps, 
-        getElevation(world_pos.x - eps, world_pos.z) - elevation, 
-        0.0
-    ));
+    let eps = 0.001;
+    let ex = getElevation(wp.x + eps, wp.z) * amp;
+    let ez = getElevation(wp.x, wp.z + eps) * amp;
 
-    let bitangent = normalize(vec3<f32>(
-        0.0, 
-        getElevation(world_pos.x, world_pos.z - eps) - elevation, 
-        eps
-    ));
+    let dx = ex - e0;
+    let dz = ez - e0;
 
-    let objectNormal = normalize(cross(tangent, bitangent));
+    let N = normalize(vec3<f32>(-dx, 1.0, -dz));
 
-    out.world_pos = world_pos;
-    out.normal = objectNormal;
+    out.world_pos = wp;
+    out.normal = N;
     out.uv = input.uv;
-    out.clip_position = position_world_to_clip(world_pos);
-
+    out.clip_position = position_world_to_clip(wp);
     return out;
 }
 
-const DEBUG = false;
-
+const DEBUG = true;
 
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-    // Project water world pos into the reflection camera's clip space
+    // Base water color
+    var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
+    var peakColor = vec3<f32>(1.0, 1.0, 1.0);
+    if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
+
+    // Highlights
+    let elevation = getElevation(input.world_pos.x, input.world_pos.z);
+    let highlight = smoothstep(0.28, 0.36, elevation);
+    let boosted = elevation * mix(1.0, 4.0, highlight);
+    let elevationFactor = (boosted - 0.1) * 0.35;
+
+    
+    var color = mix(surfaceColor, peakColor, elevationFactor);
+
+    // Reflection
     let clip = reflection.clip_from_world * vec4<f32>(input.world_pos, 1.0);
-    
-    // Perspective divide to get NDC coordinates
-    let ndc = clip.xy / clip.w;
-    let uv = ndc * vec2(0.5, -0.5) + vec2(0.5);
-    
-    // Sample the reflection texture
-    let reflection_color = textureSample(terrain_texture, terrain_sampler, uv);
-    
-    return reflection_color;
+    let ndc  = clip.xy / clip.w;
+    var uv   = ndc * 0.5 + vec2<f32>(0.5, 0.5);
+    uv.y = 1.0 - uv.y;
+
+    let refl = textureSample(terrain_texture, terrain_sampler, uv);
+    let final_rgb = color + refl.rgb;
+    return vec4(final_rgb, 1.0);
 }
-// @fragment
-// fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-//     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
-//     var peakColor = vec3<f32>(1.0, 1.0, 1.0);
 
-//     let elevation = getElevation(input.world_pos.x, input.world_pos.z);
-//     let highlight = smoothstep(0.28, 0.36, elevation);
-//     let boosted = elevation * mix(1.0, 4.0, highlight);
-//     let elevationFactor = (boosted - 0.1) * 0.35;
 
-//     if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
-//     var color = mix(surfaceColor, peakColor, elevationFactor);
-
-//     return vec4(color, 0.92);
-// }
+// Still need to:
+// Add foam at the waterlines using depth buffer
+// Depth based opacity of objects in the water
+// Add slight color tint to reflections for more realistic water
+// Boost contrast slightly for more vibrant look
+// finalColor = pow(finalColor, vec3(0.95));

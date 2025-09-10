@@ -55,8 +55,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Startup, ((create_shader_resources, setup_cameras, setup_light).chain()))
-        .add_systems(PreUpdate, change_camera_target)
-        .add_systems(Update, (follow_target, rotate_camera, (update_camera, update_render_camera, update_reflection_uniform).chain()));
+        .add_systems(PreUpdate, (change_camera_target, follow_target, rotate_camera, (update_camera, update_render_camera, update_reflection_uniform).chain()));
     }
 }
 
