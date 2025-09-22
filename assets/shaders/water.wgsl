@@ -105,11 +105,13 @@ fn fragment(input: VertexOutput, @builtin(sample_index) si: u32) -> @location(0)
     let view_pos = position_world_to_view(input.world_pos);
     let water_d = view_z_to_depth_ndc(view_pos.z);
 
-    var thickness = max(scene_d+0.0025 - water_d, 0.0);
-    thickness = pow(thickness, 1.15); 
-    let t01 = smoothstep(0.00, 0.003, thickness);
+    var thickness = max(scene_d+0.0012 - water_d, 0.0);
+    thickness = smoothstep(0.00, 0.002, thickness);
+
+    thickness = pow(thickness, 1.2);
     
-    return vec4(color, 1.0 - t01);
+    //return vec4(vec3(1.0)*thickness, 1.0);
+    return vec4(color, 1.0 - thickness);
 }
 
 
