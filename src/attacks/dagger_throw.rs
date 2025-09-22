@@ -63,19 +63,18 @@ fn perform_attack(
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut attacks: Query<(Entity, &ChildOf, &mut DaggerThrow)>,
-    mut parent_query: Query<(&Position, &mut Transform, &mut ActionState, &OnIsland)>,
+    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland)>,
 ) {
         for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, mut transform, mut state, island)) = parent_query.get_mut(parent.0) {
+        if let Ok((pos, mut state, island)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
             attack.timer.tick(time.delta());
 
             if island_maps.get_map(island.0).is_some() && !attack.hit { //TODO: using attack.hit to ensure only one projectile is spawned, not ideal but works for now
                 attack.hit = true;
-                
-
+            
                 let attack_direction = check_attack_path(
-                    IVec3::new(pos.0.x, pos.0.y, pos.0.z),
+                    pos.get(),
                     attack.direction,
                     ATTACK_RANGE,
                     island_maps.get_map(island.0).unwrap()
@@ -95,13 +94,12 @@ fn perform_attack(
                         speed: 16.0,
                         damage: DAMAGE
                     },
-                    Transform::from_xyz(pos.0.x as f32, pos.0.y as f32, pos.0.z as f32),
+                    Transform::from_translation(pos.current.as_vec3()),
                     OnIsland(island.0)
                 ));
             }
 
             if attack.timer.finished() {
-                transform.translation = pos.0.as_vec3();
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;
             }

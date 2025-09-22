@@ -5,7 +5,7 @@ use crate::components::character::LocalPlayer;
 use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
-use crate::plugins::camera::{CameraColorImage, CameraTarget, NewCameraTarget, LAYER_WATER};
+use crate::plugins::camera::{CameraTarget, NewCameraTarget, LAYER_WATER};
 use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -19,17 +19,12 @@ pub struct ReflectionUniform {
 pub struct WaterMaterial {
     #[uniform(0)]
     pub reflection: ReflectionUniform,
-
-    #[texture(1)]
-    #[sampler(2)]
-    pub world_texture: Option<Handle<Image>>,
 }
 
 impl Default for WaterMaterial {
     fn default() -> Self {
         Self {
             reflection: ReflectionUniform::default(),
-            world_texture: default(),
         }
     }
 }
@@ -148,7 +143,6 @@ fn spawn_overworld(
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     overworld_query: Query<&OverworldRoot>,
     world_seed: Res<WorldSeed>,
-    world_texture: Res<CameraColorImage>
 ) {
     println!("spawning {}", world_seed.0);
     if overworld_query.single().is_ok() {
@@ -168,7 +162,6 @@ fn spawn_overworld(
         .spawn((
             Mesh3d(meshes.add(Plane3d::default().mesh().size(75.0, 75.0).subdivisions(500))),
             MeshMaterial3d(water_materials.add(WaterMaterial {
-                world_texture: Some(world_texture.0.clone()),
                 ..Default::default()
             })),
             Transform::from_xyz(0.0, WATER_HEIGHT, 0.0),

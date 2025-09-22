@@ -48,45 +48,52 @@ fn register_base_attack(
         } 
     });
     let key = key_of::<BaseAttack>();
-    catalog.0.insert(key, AttackSpec {offsets: &STANDARD, cooldown: 0.8, damage: DAMAGE });
+    catalog.0.insert(key, AttackSpec {offsets: &STANDARD, cooldown: 0.4, damage: DAMAGE });
 }
 
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
-    mut attacks: Query<(Entity, &ChildOf,  &mut BaseAttack)>,
-    mut parent_query: Query<(&Position, &VisualRef, &mut ActionState, &OnIsland, &GlobalTransform)>,
-    mut visual_query: Query<&mut Transform, With<VisualEntity>>
+    mut attacks: Query<(Entity, &ChildOf, &mut BaseAttack)>,
+    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland)>,
+    visual_query: Query<&VisualRef>,
+    mut transform_query: Query<(&mut Transform, &GlobalTransform), With<VisualEntity>>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, visual_ref, mut state, island, global_tf)) = parent_query.get_mut(parent.0) {
-            if let Ok(mut transform) = visual_query.get_mut(**visual_ref) {
-                *state = ActionState::Attacking;
-                attack.timer.tick(time.delta());
+        let mut t = 0.0;
+        if let Ok((pos, mut state, island)) = parent_query.get_mut(parent.0) { //probably missing visual, globaltransform, or something when server is not on island...
+            //logic
+            *state = ActionState::Attacking;
+            attack.timer.tick(time.delta());
 
-                let t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
+            t = (attack.timer.elapsed_secs() / attack.timer.duration().as_secs_f32()).clamp(0.0, 1.0);
+            if !attack.hit && t >= 0.5 {
+                attack.hit = true;
+                commands.trigger(DamageEvent::new(
+                    parent.0,
+                    island.0,
+                    pos.get() + attack.direction,
+                    DAMAGE
+                ));
+            }
+
+            if attack.timer.finished() {
+                commands.entity(child_entity).despawn();
+                *state = ActionState::Idle;
+            }
+        }    
+
+        //visual
+        if let Ok(visual_ref) = visual_query.get(parent.0) {
+            if let Ok((mut transform, global_transform)) = transform_query.get_mut(**visual_ref) {
                 let magnitude = if t < 0.5 {
                     t
                 } else {
                     1.0 - t
                 };
-                if !attack.hit && t >= 0.5 {
-                    attack.hit = true;
-                    commands.trigger(DamageEvent::new(
-                        parent.0,
-                        island.0,
-                        pos.0 + attack.direction,
-                        DAMAGE
-                    ));
-                }
 
-                transform.translation = global_tf.rotation().inverse() * attack.direction.as_vec3() * magnitude * 0.5;
-
-                if attack.timer.finished() {
-                    commands.entity(child_entity).despawn();
-                    *state = ActionState::Idle;
-                }
-            }
-        }      
+                transform.translation = global_transform.rotation().inverse() * attack.direction.as_vec3() * magnitude * 0.5;
+            }  
+        }
     }
 }

@@ -92,7 +92,7 @@ impl Plugin for AttackPlugin {
         .add_observer(damage_trigger)
         .add_observer(attack_trigger)
         .add_observer(damage_negated_trigger)
-        .add_systems(PreUpdate, (tick_attack_cooldowns.run_if(server_running), interrupt_attack_stun, damage_visualizer_system))
+        .add_systems(PreUpdate, (tick_attack_cooldowns, interrupt_attack_stun, damage_visualizer_system))
         .add_plugins((BaseAttackPlugin, CutThroughPlugin, DaggerThrowPlugin, CounterPlugin, ProjectilePlugin));
     }
 }
@@ -244,9 +244,10 @@ fn damage_trigger(
         if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
             if let Some(victim) = map.get_target(damage_trigger.offset) {
                 if let Ok((mut hp, children)) = health.get_mut(victim) {
+                    println!("Victim found");
                     let mut negated = false;
 
-                    if let Some(children) = children {
+                    if let Some(children) = children { // checking if there is any ability negating the attack
                         for child in children.iter() {
                             if let Ok(negate_instance) = negate_query.get(child) {
 
@@ -269,7 +270,7 @@ fn damage_trigger(
                     
                     if !negated {
                         let remaining_health = hp.damage(damage_trigger.damage);
-
+                        println!("doing the damage: {}", remaining_health);
                         commands.server_trigger_targets(
                             ToClients {
                                 mode: SendMode::Broadcast,

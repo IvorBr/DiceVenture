@@ -15,7 +15,7 @@ pub struct MovementPlugin;
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            PreUpdate,
             (
                 standard_mover,
             )
@@ -45,13 +45,13 @@ fn standard_mover(
             };
 
             if let Some(Ok(target_pos)) = enemy_target {
-                let closest_offset = enemy_pos.0;
-                let path = astar(closest_offset, target_pos.0, &map, move_rule);
+                let closest_offset = enemy_pos.get();
+                let path = astar(closest_offset, target_pos.get(), &map, move_rule);
 
                 if let Some(next_step) = path.get(1) {
-                    map.remove_entity(enemy_pos.0);
-                    enemy_pos.0 = *next_step + (enemy_pos.0 - closest_offset);
-                    map.add_entity_ivec3(enemy_pos.0, Tile::new(TileType::Enemy, enemy_entity));
+                    map.remove_entity(closest_offset);
+                    map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
+                    enemy_pos.set(*next_step);
                     
                     timer.0.reset();
                     timer.1 = false;

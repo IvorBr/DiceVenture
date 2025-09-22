@@ -32,7 +32,28 @@ impl Default for Health {
 }
 
 #[derive(Component, Serialize, Deserialize, Default)]
-pub struct Position(pub IVec3);
+pub struct Position {
+    pub previous: Option<IVec3>,
+    pub current: IVec3,
+}
+
+impl Position {
+    pub fn new(position: IVec3) -> Self {
+        Position {
+            previous: None,
+            current: position
+        }
+    }
+
+    pub fn set(&mut self, position: IVec3) {
+        self.previous = Some(self.current);
+        self.current = position;
+    }
+
+    pub fn get(&self) -> IVec3 {
+        self.current
+    }
+}
 
 #[derive(Component, Serialize, Deserialize)]
 pub struct ViewDirection(pub IVec3);
@@ -111,3 +132,9 @@ pub struct VisualRef(pub Entity);
 #[derive(Component)]
 #[require(Transform)]
 pub struct VisualEntity;
+
+#[derive(Debug, Deserialize, Event, Serialize)]
+pub struct PositionUpdate {
+   pub prev_pos: IVec3,
+   pub new_pos: IVec3
+}

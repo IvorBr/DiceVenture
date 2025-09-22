@@ -74,11 +74,7 @@ fn spawn_island_player(
         }
 
         commands.entity(entity).insert((
-            Transform::from_xyz(
-                position.0.x as f32,
-                position.0.y as f32,
-                position.0.z as f32
-            ).with_scale(Vec3::new(0.7, 0.7, 0.7)),
+            Transform::from_translation(position.get().as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
         ));
 
         let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
@@ -195,7 +191,7 @@ fn add_waiting_player(
                 spawn_pos.z += 1;
             }
 
-            commands.entity(entity).insert(Position(spawn_pos)).remove::<Waiting>();
+            commands.entity(entity).insert(Position::new(spawn_pos)).remove::<Waiting>();
 
             map.add_player(spawn_pos, entity);
         }
@@ -257,7 +253,7 @@ fn elimination_island_objective(
                             ..Default::default()
                         })),
                         Transform::from_xyz(chest_pos.x as f32, chest_pos.y as f32, chest_pos.z as f32),
-                        Position(chest_pos),
+                        Position::new(chest_pos),
                         Chest,
                         Health::new(30),
                         OnIsland(island.0),
@@ -294,11 +290,11 @@ fn player_leaves_island(
 ) {
     for (position, entity, owner, island) in &player_query {
         if let Some(map) = islands.get_map_mut(island.0) {
-            if position.0 == map.leave_position + IVec3::Y {
+            if position.get() == map.leave_position + IVec3::Y {
                 println!("{:?} leaves island", entity);
 
                 commands.entity(entity).despawn();
-                map.remove_entity(position.0);
+                map.remove_entity(position.get());
                 map.player_count -= 1;
                 leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });    
             }
@@ -324,13 +320,12 @@ fn clean_up_island(
             
             for (enemy_entity, island_id) in enemy_query.iter() {
                 if *id == island_id.0 {
-                    commands.entity(enemy_entity).despawn();
-
+                    commands.entity(enemy_entity).insert(RemoveEntity);
                 }
             }
             for (entity, island_id) in islands.iter_mut() {
                 if island_id.0 == *id {
-                    commands.entity(entity).remove::<MapFinishedIsland>();
+                    commands.entity(entity).remove::<MapFinishedIsland>(); //TODO: Improve this logic, MapFinishedIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
                 }
             }
             false

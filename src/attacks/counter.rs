@@ -75,6 +75,7 @@ fn perform_attack(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
+        attack.timer.tick(time.delta());
         if let Ok(mut state) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
             if attack.timer.elapsed_secs() == 0.0 {
@@ -87,8 +88,7 @@ fn perform_attack(
                         Transform::from_xyz(0.0, 0.0, 0.0)
                     ));
             }
-            attack.timer.tick(time.delta());
-
+            
             if attack.timer.finished() {
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;

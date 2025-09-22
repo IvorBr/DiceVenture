@@ -3,8 +3,14 @@ use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
 
+use crate::components::enemy::*;
+use crate::components::humanoid::*;
+use crate::components::island::EliminationObjective;
+use crate::components::island::OnIsland;
+use crate::attacks::base_attack::BaseAttack;
 use crate::components::island::{CompletedIslandObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland};
 use crate::components::overworld::Island;
+use crate::plugins::attack::key_of;
 use crate::preludes::network_preludes::*;
 
 use rand::rngs::StdRng;
@@ -64,27 +70,27 @@ fn setup_island_server(
             let mut generator = StdRng::seed_from_u64(island_id.0);
             
             let top_tiles = map.above_water_top_tiles();
-            // for _ in 0..5 {
-            //     let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
-            //     let enemy_id = commands
-            //         .spawn((
-            //             Enemy,
-            //             STANDARD_MOVE,
-            //             Attacks(vec![key_of::<BaseAttack>()]),
-            //             AttackCooldowns::default(),
-            //             EnemyState::Idle,
-            //             Position(enemy_pos),
-            //             MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
-            //             OnIsland(island_id.0),
-            //             RangeAggro(8)
-            //         ))
-            //         .id();
+            for _ in 0..5 {
+                let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
+                let enemy_id = commands
+                    .spawn((
+                        Enemy,
+                        STANDARD_MOVE,
+                        Attacks(vec![key_of::<BaseAttack>()]),
+                        AttackCooldowns::default(),
+                        EnemyState::Idle,
+                        Position::new(enemy_pos),
+                        MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
+                        OnIsland(island_id.0),
+                        RangeAggro(8)
+                    ))
+                    .id();
 
-            //     map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
-            //     map.enemy_count += 1;
+                map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
+                map.enemy_count += 1;
 
-            //     commands.entity(entity).insert(EliminationObjective);
-            // }
+                commands.entity(entity).insert(EliminationObjective);
+            }
         }
 
         commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();
@@ -118,7 +124,7 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
             let mut tile;
 
             if value > threshold {
-                let mut height = ((value - threshold) * 10.0).ceil() as i32; //need to be optimized to only spawn seeable parts, can simply check for neighbours
+                let mut height = ((value - threshold) * 10.0).ceil() as i32; //TODO: need to be optimized to only spawn seeable parts, can simply check for neighbours
                 if height > 3 {     // no tiles higher than 3 on islands
                     height = 3;
                 }
@@ -126,10 +132,14 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
                     tile = IVec3::new(x, y, z) + center_offset;
                     map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
                 }
-            } else { // underwater terrain 
-                // tile = IVec3::new(x, (value * 10.0).ceil() as i32, z) + center_offset;
-                // map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
-
+            } else { // underwater terrain
+                let height = (value * 10.0).ceil() as i32;
+                if height > -5 {
+                    for y in 0 ..= 1 {
+                    tile = IVec3::new(x, height - y, z) + center_offset;
+                    map.add_entity_ivec3(tile, Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER)); //TODO: do the neighbour check here too
+                }
+                }
             }
         }
     }

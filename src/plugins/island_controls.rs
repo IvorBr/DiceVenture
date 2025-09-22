@@ -26,8 +26,8 @@ impl Plugin for CharacterPlugin {
         .insert_resource(MovementCooldown {
             timer: Timer::from_seconds(0.2, TimerMode::Once),
         })
+        .add_systems(PreUpdate, (apply_movement).run_if(server_running))
         .add_systems(Update, (
-            (apply_movement).run_if(server_running),
             (movement_input, attack_input, skill_input, resolve_pending_skill_cast.after(skill_input)).in_set(IslandSet)
         ));
     }
@@ -158,7 +158,7 @@ fn attack_input(
     }
 }
 
-fn apply_movement(
+pub fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
     mut players: Query<(&OwnedBy, &mut Position, Entity, &OnIsland), With<Character>>,
     mut islands: ResMut<IslandMaps>,
@@ -168,10 +168,8 @@ fn apply_movement(
             if let Some(map) = islands.get_map_mut(island.0) {
                 if *client_entity == owner.0 {
                     let mut new_position = event.0;
-                    let current_pos = position.0.clone();
-                    new_position.x += current_pos.x;
-                    new_position.y += current_pos.y;
-                    new_position.z += current_pos.z;
+                    let current_pos = position.get().clone();
+                    new_position += current_pos;
                     
                     match map.get_tile(new_position).kind {
                         TileType::Terrain(_) => {
@@ -203,11 +201,9 @@ fn apply_movement(
                         }
                     }
                     
-                    // Update the map after the logic
                     map.remove_entity(current_pos);
                     map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
-                    
-                    position.0 = new_position;
+                    position.set(new_position);
                 }
             }
         }

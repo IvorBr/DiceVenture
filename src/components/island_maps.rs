@@ -225,6 +225,11 @@ impl Map {
         self.add_entity_ivec3(position, Tile::new(TileType::Player, entity));
     }
 
+    pub fn update_position(&mut self, entity: Entity, position: IVec3, tile_type: TileType) {
+        self.remove_entity(position);
+        self.add_entity_ivec3(position, Tile::new(tile_type, entity));
+    }
+
     pub fn shore_tiles(&mut self) -> Vec<IVec3> {
         let neighbors = [
             IVec3::X,

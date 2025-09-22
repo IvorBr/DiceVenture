@@ -1,5 +1,5 @@
 use dolly::prelude::*;
-use bevy::{asset::RenderAssetUsages, prelude::*, render::camera::CameraProjection};
+use bevy::{asset::RenderAssetUsages, core_pipeline::prepass::DepthPrepass, prelude::*, render::camera::CameraProjection};
 use mint::{Quaternion, Point3};
 use bevy::render::render_resource::*;
 
@@ -54,8 +54,8 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(Startup, ((create_shader_resources, setup_cameras, setup_light).chain()))
-        .add_systems(PreUpdate, (change_camera_target, follow_target, rotate_camera, (update_camera, update_render_camera, update_reflection_uniform).chain()));
+        .add_systems(Startup, (setup_light, setup_cameras))
+        .add_systems(PreUpdate, (change_camera_target, follow_target, rotate_camera, update_camera));
     }
 }
 
@@ -103,7 +103,7 @@ fn follow_target(
     if let Ok((target_position, target_transform)) = target_query.single() {
         if let Ok(mut dolly_cam) = camera.single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            let follow_pos = target_position.map(|p| p.0.as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
+            let follow_pos = target_position.map(|p| p.get().as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
             
             let current: Vec3 = Vec3::new(pos_driver.position.x, pos_driver.position.y, pos_driver.position.z);
             let new_pos = current.lerp(follow_pos, time.delta_secs() * 15.0);
@@ -142,101 +142,21 @@ pub fn update_camera(
     }
 }
 
-#[derive(Resource, Clone)]
-pub struct CameraColorImage(pub Handle<Image>);
-
-fn create_shader_resources(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let size = Extent3d {
-        width:  1920,
-        height: 1080,
-        depth_or_array_layers: 1,
-    };
-
-    // color texture
-    let mut color = Image::new_fill(
-        size,
-        TextureDimension::D2,
-        &[0u8; 8],
-        TextureFormat::Rgba16Float,
-        RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
-    );
-    color.texture_descriptor.usage = TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING;
-
-    let color_h = images.add(color);
-    commands.insert_resource(CameraColorImage(color_h));
-}
-
 use bevy::render::view::RenderLayers;
-use crate::plugins::overworld::{WaterMaterial, WATER_HEIGHT};
 
-fn setup_cameras(mut commands: Commands, capture: ResMut<CameraColorImage>) {
-    // Camera 0: world to offscreen images
-    commands.spawn((
-        Camera {
-            order: 0,
-            target: bevy::render::camera::RenderTarget::Image(capture.0.clone().into()),
-            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-            ..default()
-        },
-        Camera3d {
-            ..default()
-        },
-        RenderLayers::layer(LAYER_WORLD.into()),
-        RenderCamera,
-    ));
-
-    // Camera 1: water and world to screen
+fn setup_cameras(mut commands: Commands) {
     let transform = Transform::from_xyz(0.0, 12.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
     let rotation = transform.rotation;
 
     commands.spawn((
         PlayerCamera,
         DollyCamera::new(rotation),
-        Camera {
-            order : 1,
-            ..default()
-        },
         Camera3d {
             depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING).into(),
             ..default()
         },
         RenderLayers::from_layers(&[LAYER_WORLD as usize, LAYER_WATER as usize]),
-
+        DepthPrepass,
         transform
     ));
-}
-
-pub fn update_render_camera(
-    main_query: Query<&Transform, (With<PlayerCamera>, Without<RenderCamera>)>,
-    mut capture_query: Query<&mut Transform, (With<RenderCamera>, Without<PlayerCamera>)>,
-) {
-    if let (Ok(main_transform), Ok(mut capture_transform)) = (main_query.single(), capture_query.single_mut()) {
-        let mut mirrored_position = main_transform.translation;
-        mirrored_position.y = 2.0 * WATER_HEIGHT - mirrored_position.y;
-
-        let forward = main_transform.forward();
-        let up = main_transform.up();
-        
-        let forward_mirrored = Vec3::new(forward.x, -forward.y, forward.z);
-        let up_mirrored = Vec3::new(up.x, -up.y, up.z);
-
-        *capture_transform = Transform::from_translation(mirrored_position).looking_to(forward_mirrored, up_mirrored);
-    }
-}
-
-pub fn update_reflection_uniform(
-    capture_query: Query<(&GlobalTransform, &Projection), With<RenderCamera>>,
-    mut mats: ResMut<Assets<WaterMaterial>>,
-) {
-    if let Ok((capture_transform, cap_projection)) = capture_query.single() {
-        let view = capture_transform.compute_matrix().inverse();
-        let projection = cap_projection.get_clip_from_view();
-        let clip_from_world = projection * view;
-        for (_handle, material) in mats.iter_mut() {
-            material.reflection.clip_from_world = clip_from_world;
-        }
-    }
 }

@@ -60,12 +60,13 @@ fn perform_attack(
     mut island_maps: ResMut<IslandMaps>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
+        attack.timer.tick(time.delta());
+
         if let Ok((mut pos, mut state, island)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
-            attack.timer.tick(time.delta());
 
             if attack.timer.finished() {
-                let mut check_pos = pos.0 + attack.direction;
+                let mut check_pos = pos.get() + attack.direction;
                 if let Some(map) = island_maps.get_map_mut(island.0) {
                     while map.get_target(check_pos).is_some() {
                         commands.trigger(DamageEvent::new(
@@ -79,9 +80,9 @@ fn perform_attack(
                     }
 
                     if map.can_move(check_pos) {
-                        map.remove_entity(pos.0);
+                        map.remove_entity(pos.get());
                         map.add_entity_ivec3(check_pos, Tile::new(TileType::Player, parent.0));
-                        pos.0 = check_pos;
+                        pos.set(check_pos);
                     }
                 }
 

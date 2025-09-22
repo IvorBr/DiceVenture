@@ -355,11 +355,12 @@ fn gold_changed(
 
 fn character_health_changed(
     mut health_ui_query: Query<&mut Text, With<HealthText>>,
-    health_query: Query<&Health, (Changed<Health>, With<LocalPlayer>)>,
+    health_query: Query<&Health, With<LocalPlayer>>,
 ) {
-    let Ok(health) = health_query.single() else { return };
+    let mut value = 0;
+    if let Ok(health) = health_query.single() { value = health.value };
     let Ok(mut text) = health_ui_query.single_mut() else { return };
 
-    text.0 = health.value.to_string() + " HP";
+    text.0 = value.to_string() + " HP";
 }
 

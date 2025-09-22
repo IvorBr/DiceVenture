@@ -1,7 +1,8 @@
 #import bevy_pbr::{
     mesh_view_bindings::{globals, view},
-    view_transformations::position_world_to_clip,
-    mesh_functions::{get_world_from_local, mesh_position_local_to_world}
+    view_transformations::{position_world_to_clip, position_world_to_view, view_z_to_depth_ndc},
+    mesh_functions::{get_world_from_local, mesh_position_local_to_world},
+    prepass_utils::prepass_depth
 }
 
 #import "shaders/noise.wgsl"::simplex_noise2;
@@ -73,9 +74,10 @@ fn vertex(input: VertexInput) -> VertexOutput {
     let dz = ez - e0;
 
     let N = normalize(vec3<f32>(-dx, 1.0, -dz));
+    out.normal = N;
 
     out.world_pos = wp;
-    out.normal = N;
+   
     out.uv = input.uv;
     out.clip_position = position_world_to_clip(wp);
     return out;
@@ -84,8 +86,9 @@ fn vertex(input: VertexInput) -> VertexOutput {
 const DEBUG = false;
 
 @fragment
-fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment(input: VertexOutput, @builtin(sample_index) si: u32) -> @location(0) vec4<f32> {
     // Base water color
+    var deepColor = vec3<f32>(0.0, 0.33, 0.51);
     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
     var peakColor = vec3<f32>(1.0, 1.0, 1.0);
 
@@ -97,40 +100,24 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     if (DEBUG) { surfaceColor = vec3(0.0); peakColor = vec3(1.0); }
     var color = mix(surfaceColor, peakColor, elevationFactor);
 
-    // Reflection
-    let clip = reflection.clip_from_world * vec4<f32>(input.world_pos, 1.0);
-    let ndc  = clip.xy / clip.w;
-    var uv   = ndc * 0.5 + vec2<f32>(0.5, 0.5);
-    uv.y = 1.0 - uv.y;
+    // Water depth
+    let scene_d = prepass_depth(input.clip_position, si);
+    let view_pos = position_world_to_view(input.world_pos);
+    let water_d = view_z_to_depth_ndc(view_pos.z);
 
-    let refl = textureSample(terrain_texture, terrain_sampler, uv);
-    let viewDir = normalize(view.world_position - input.world_pos);
-    let ndotv = max(dot(input.normal, viewDir), 0.0);
-
-    let N = normalize(input.normal);
-    let V = normalize(view.world_position - input.world_pos);
-    let ndv = clamp(dot(N, V), 0.0, 1.0);
-
-    let base_refl = 0.8;   // reflection when looking straight down (tune 0.1–0.35)
-    let grazing_boost = 0.80; // how much extra at grazing (tune 0.5–1.0)
-    let power = 3.0;    // curve sharpness (2–5 looks good)
-
-    let fresnel_like = base_refl + grazing_boost * pow(1.0 - ndv, power);
-    var weight = clamp(fresnel_like, 0.0, 1.0);
-    weight *= 0.8 + 0.2 * saturate(1.0 - abs(N.y)); 
-
-    let mask = weight * refl.a;
-
-    let final_rgb = mix(color, refl.rgb, mask);
-    return vec4(final_rgb, 1.0);
+    var thickness = max(scene_d+0.0025 - water_d, 0.0);
+    thickness = pow(thickness, 1.15); 
+    let t01 = smoothstep(0.00, 0.003, thickness);
+    
+    return vec4(color, 1.0 - t01);
 }
 
 
 // Still need to add
-// Add foam at the waterlines using depth buffer
-// Depth-based opacity
+// foam at the waterlines
+// have effects at the less deep parts, so we need a better fall off
+
 // let opacity = mix(0.7, 1.0, fresnel); // More transparent when looking down
-// Add slight color tint to reflections for more realistic water
 // finalColor = mix(finalColor, finalColor * vec3(0.9, 0.95, 1.0), 0.1);
 // Boost contrast slightly for more vibrant look
 // finalColor = pow(finalColor, vec3(0.95));
