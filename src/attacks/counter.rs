@@ -16,7 +16,6 @@ pub struct Counter {
     hit: bool
 }
 
-
 impl Default for Counter {
     fn default() -> Self {
         Counter { 
@@ -75,21 +74,26 @@ fn perform_attack(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
+        let initialize_counter : bool = attack.timer.elapsed_secs() == 0.0;
+
         attack.timer.tick(time.delta());
+        println!("Performing counter");
         if let Ok(mut state) = parent_query.get_mut(parent.0) {
+            println!("Performing parent search");
             *state = ActionState::Attacking;
-            if attack.timer.elapsed_secs() == 0.0 {
+            if initialize_counter {
                 commands.entity(child_entity).insert((
-                        Mesh3d(meshes.add(Cuboid::new(1.1, 1.1, 1.1))),
-                        MeshMaterial3d(materials.add(StandardMaterial {
-                            base_color: Color::srgb(0.5, 1.0, 0.5),
-                            ..Default::default()
-                        })),
-                        Transform::from_xyz(0.0, 0.0, 0.0)
-                    ));
+                    Mesh3d(meshes.add(Cuboid::new(1.1, 1.1, 1.1))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: Color::srgb(0.5, 1.0, 0.5),
+                        ..Default::default()
+                    })),
+                    Transform::from_xyz(0.0, 0.0, 0.0)
+                ));
             }
             
             if attack.timer.finished() {
+                println!("REMOVING");
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;
             }

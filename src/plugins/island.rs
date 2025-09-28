@@ -182,7 +182,7 @@ fn add_waiting_player(
     mut islands: ResMut<IslandMaps>,
     position_query: Query<&Position>
 ) {
-    for (entity, island) in players.iter() {
+    for (player_entity, island) in players.iter() {
         if let Some(map) = islands.maps.get_mut(&island.0) {
             let mut spawn_pos = map.leave_position;
             spawn_pos.y += 2;
@@ -190,9 +190,15 @@ fn add_waiting_player(
                 spawn_pos.z += 1;
             }
 
-            commands.entity(entity).insert(Position::new(spawn_pos)).remove::<Waiting>();
+            commands.entity(player_entity).insert(Position::new(spawn_pos)).remove::<Waiting>();
 
-            map.add_player(spawn_pos, entity);
+            commands.server_trigger_targets(
+                ToClients {
+                    mode: SendMode::BroadcastExcept(SERVER),
+                    event: ServerPositionUpdate { position: spawn_pos } ,
+                },
+                player_entity,
+            );
 
             for entity in map.entities.iter() {
                 if let Ok(position) = position_query.get(*entity) {
@@ -204,8 +210,9 @@ fn add_waiting_player(
                         *entity,
                     );
                 }   
-                
             }
+
+            map.add_player(spawn_pos, player_entity);
         }
     }
 }

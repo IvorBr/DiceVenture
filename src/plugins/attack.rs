@@ -151,7 +151,7 @@ fn client_visualize_attack(
     mut view_direction_q: Query<&mut ViewDirection>
 ) {
     if let Ok(mut view_direction) = view_direction_q.get_mut(server_trigger.target()) {
-        view_direction.0 = server_trigger.offset;
+        view_direction.0 = -server_trigger.offset;
     }
 
     if let Ok(mut active_skills) = active_skills_q.get_mut(server_trigger.target()) {

@@ -29,7 +29,6 @@ impl Plugin for HumanoidPlugin {
             ((player_death_check, position_change_event).run_if(server_running),
             (animate_movement,animate_view_direction).in_set(IslandSet)),
             (sync_status_flags_system, status_flags_to_actionstate_system).chain(),
-            position_changed
         ))
         .add_systems(Update, (remove_entities).run_if(server_running));
     }
@@ -94,12 +93,11 @@ fn position_change_event(
 
 fn position_trigger(
     trigger: Trigger<ServerPositionUpdate>,
-    mut entity_query: Query<(&mut Position, &OnIsland, Option<&Character>)>,
+    mut entity_query: Query<(&mut Position, &mut ViewDirection, &OnIsland, Option<&Character>)>,
     mut island_maps: ResMut<IslandMaps>
 ) {
-    if let Ok((mut position, island, character)) = entity_query.get_mut(trigger.target()) {
+    if let Ok((mut position, mut view_direction, island, character)) = entity_query.get_mut(trigger.target()) {
         if let Some(map) = island_maps.get_map_mut(island.0) {
-            
             
             let mut tile_type = TileType::Enemy;
             if character.is_some() {
@@ -108,16 +106,11 @@ fn position_trigger(
 
             map.remove_entity(position.0);
             map.add_entity_ivec3(trigger.position, Tile::new(tile_type, trigger.target()));
+            
+            view_direction.0 = ((position.0 - trigger.position).as_vec3() * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
+
             position.0 = trigger.position;
         }
-    }
-}
-
-fn position_changed(
-    mut q: Query<(&Position, &Transform, &mut ViewDirection), Changed<Position>>,
-){
-    for (position, transform, mut view_direction) in q.iter_mut() {
-        view_direction.0 = ((transform.translation - position.0.as_vec3()) * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
     }
 }
 
