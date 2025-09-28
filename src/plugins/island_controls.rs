@@ -5,6 +5,7 @@ use crate::attacks::cut_through::CutThrough;
 use crate::attacks::dagger_throw::DaggerThrow;
 use crate::components::character::PendingSkillCast;
 use crate::components::humanoid::ActionState;
+use crate::components::humanoid::PositionUpdate;
 use crate::components::humanoid::ViewDirection;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
@@ -27,9 +28,9 @@ impl Plugin for CharacterPlugin {
             timer: Timer::from_seconds(0.2, TimerMode::Once),
         })
         .add_systems(PreUpdate, (apply_movement).run_if(server_running))
-        .add_systems(Update, (
+        .add_systems(Update,
             (movement_input, attack_input, skill_input, resolve_pending_skill_cast.after(skill_input)).in_set(IslandSet)
-        ));
+        );
     }
 }
 
@@ -160,15 +161,16 @@ fn attack_input(
 
 pub fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut players: Query<(&OwnedBy, &mut Position, Entity, &OnIsland), With<Character>>,
+    mut position_event: EventWriter<PositionUpdate>,
+    players: Query<(&OwnedBy, &Position, Entity, &OnIsland), With<Character>>,
     mut islands: ResMut<IslandMaps>,
 ) {
     for FromClient { client_entity, event } in move_events.read() {
-        for (owner, mut position, player_entity, island) in &mut players {
+        for (owner, position, player_entity, island) in players.iter() {
             if let Some(map) = islands.get_map_mut(island.0) {
                 if *client_entity == owner.0 {
                     let mut new_position = event.0;
-                    let current_pos = position.get().clone();
+                    let current_pos = position.0.clone();
                     new_position += current_pos;
                     
                     match map.get_tile(new_position).kind {
@@ -200,10 +202,7 @@ pub fn apply_movement(
                             return;
                         }
                     }
-                    
-                    map.remove_entity(current_pos);
-                    map.add_entity_ivec3(new_position, Tile::new(TileType::Player, player_entity));
-                    position.set(new_position);
+                    position_event.write(PositionUpdate { new_position: new_position, entity: player_entity });
                 }
             }
         }

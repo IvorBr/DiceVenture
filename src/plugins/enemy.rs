@@ -55,12 +55,12 @@ fn init_enemy(
         ))
         .id();
 
-        commands.entity(entity).insert(Transform::from_translation(position.get().as_vec3())).add_child(visual).insert(VisualRef(visual));
+        commands.entity(entity).insert(Transform::from_translation(position.0.as_vec3())).add_child(visual).insert(VisualRef(visual));
 
         if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
             let mut prev_entity = entity;
             for i in 1..5 {
-                let offset_pos = position.get() - IVec3::new(i, 0, 0);
+                let offset_pos = position.0 - IVec3::new(i, 0, 0);
                 let next_entity = commands.spawn((
                     Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
                     MeshMaterial3d(materials.add(StandardMaterial {
@@ -72,7 +72,7 @@ fn init_enemy(
                         offset_pos.y as f32,
                         offset_pos.z as f32,
                     ),
-                    Position::new(offset_pos),
+                    Position(offset_pos),
                 )).id();
 
                 println!("{}",next_entity);
@@ -137,8 +137,8 @@ fn attack_check(
 
             let spec = catalog.0.get(id).unwrap();
 
-            if let Some((_, target_pos)) = players.iter().find(|(_, pos)| spec.offsets.contains(&(pos.get() - enemy_pos.get()))) {
-                let dir = target_pos.get() - enemy_pos.get();
+            if let Some((_, target_pos)) = players.iter().find(|(_, pos)| spec.offsets.contains(&(pos.0 - enemy_pos.0))) {
+                let dir = target_pos.0 - enemy_pos.0;
                 
                 if let Ok(mut view_direction) = view_direction_q.get_mut(enemy_entity) {
                     view_direction.0 = dir;

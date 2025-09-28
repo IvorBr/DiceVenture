@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::components::humanoid::ActionState;
 use crate::components::humanoid::PositionUpdate;
+use crate::components::humanoid::ServerPositionUpdate;
 use crate::components::humanoid::Status;
 use crate::components::humanoid::StatusFlags;
 use crate::components::humanoid::Stunned;
@@ -20,11 +21,12 @@ impl Plugin for HumanoidPlugin {
         app
         .replicate::<RemoveEntity>()
         .replicate::<Health>()
-        .add_observer(entity_remove)
-        .add_client_trigger::<PositionUpdate>(Channel::Ordered)
+        .add_event::<PositionUpdate>()
+        .add_server_trigger::<ServerPositionUpdate>(Channel::Ordered)
+        .add_observer(position_trigger)
         .add_systems(PreUpdate,
         (
-            (player_death_check.run_if(server_running),
+            ((player_death_check, position_change_event).run_if(server_running),
             (animate_movement,animate_view_direction).in_set(IslandSet)),
             (sync_status_flags_system, status_flags_to_actionstate_system).chain(),
             position_changed
@@ -53,39 +55,69 @@ fn remove_entities(
     mut islands: ResMut<IslandMaps>
 ) {
     for (entity, position, island) in entities.iter() {
-        islands.get_map_mut(island.0).map(|map| map.remove_entity(position.get()));
+        islands.get_map_mut(island.0).map(|map| {map.remove_entity(position.0); map.entities.remove(&entity)});
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn();
     }
 }
 
-fn entity_remove(
-    trigger: Trigger<OnRemove, Position>,
-    entities: Query<Entity, With<RemoveEntity>>,
-){
-    if let Ok(entity) = entities.get(trigger.target()) {
-        println!("REMOVED {}", entity);
+fn position_change_event(
+    mut commands: Commands,
+    mut event: EventReader<PositionUpdate>,
+    mut entity_query: Query<(&mut Position, &OnIsland, Option<&Character>)>,
+    mut island_maps: ResMut<IslandMaps>
+) {
+    for PositionUpdate { new_position, entity } in event.read() {
+        if let Ok((mut entity_position, island, character)) = entity_query.get_mut(*entity) {
+            if let Some(map) = island_maps.get_map_mut(island.0) {
+                
+                let mut tile_type = TileType::Enemy;
+                if character.is_some() {
+                    tile_type = TileType::Player;
+                }
+
+                map.remove_entity(entity_position.0);
+                map.add_entity_ivec3(*new_position, Tile::new(tile_type, *entity));
+                entity_position.0 = *new_position;
+
+                commands.server_trigger_targets(
+                    ToClients {
+                        mode: SendMode::BroadcastExcept(SERVER),
+                        event: ServerPositionUpdate { position: *new_position } ,
+                    },
+                    *entity,
+                );
+            }
+        }
+    }
+}
+
+fn position_trigger(
+    trigger: Trigger<ServerPositionUpdate>,
+    mut entity_query: Query<(&mut Position, &OnIsland, Option<&Character>)>,
+    mut island_maps: ResMut<IslandMaps>
+) {
+    if let Ok((mut position, island, character)) = entity_query.get_mut(trigger.target()) {
+        if let Some(map) = island_maps.get_map_mut(island.0) {
+            
+            
+            let mut tile_type = TileType::Enemy;
+            if character.is_some() {
+                tile_type = TileType::Player;
+            }
+
+            map.remove_entity(position.0);
+            map.add_entity_ivec3(trigger.position, Tile::new(tile_type, trigger.target()));
+            position.0 = trigger.position;
+        }
     }
 }
 
 fn position_changed(
-    mut q: Query<(Entity, &Position, &Transform, &mut ViewDirection, &OnIsland, Option<&Character>), Changed<Position>>,
-    mut islands: ResMut<IslandMaps>,
+    mut q: Query<(&Position, &Transform, &mut ViewDirection), Changed<Position>>,
 ){
-    for (entity, position, transform, mut view_direction, island, character) in q.iter_mut() {
-        // view_direction.0 = ((transform.translation - position.get().as_vec3()) * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
-        // islands.get_map_mut(island.0).map(|map| {
-        //     position.previous.map(|pos| map.remove_entity(pos));
-            
-        //     let mut tile_type = TileType::Enemy;
-        //     if character.is_some() {
-        //         tile_type = TileType::Player;
-        //     }
-            
-        //     map.add_entity_ivec3(position.get(), Tile::new(tile_type, entity));
-
-        //     println!("{}, {:?}, {}", entity, position.previous, position.get());
-        // });
+    for (position, transform, mut view_direction) in q.iter_mut() {
+        view_direction.0 = ((transform.translation - position.0.as_vec3()) * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
     }
 }
 
@@ -103,7 +135,7 @@ fn animate_movement(
     time: Res<Time>
 ) {
     for (position, mut transform, mut action_state) in &mut moved_entities {
-        let target = position.get().as_vec3();
+        let target = position.0.as_vec3();
         let current = transform.translation;
 
         if current.distance(target) > 0.01 {

@@ -29,7 +29,7 @@ struct VertexOutput {
     @location(2) uv: vec2<f32>,
 };
 
-fn quantize_vec2(v: vec2<f32>, steps: f32) -> vec2<f32> {
+fn quantize_vec3(v: vec3<f32>, steps: f32) -> vec3<f32> {
     return floor(v * steps) / steps;
 }
 
@@ -37,21 +37,22 @@ fn simplex01(n: f32) -> f32 { return n * 0.5 + 0.5; }
 
 const PATTERN_SCALE = 10.0;
 const WAVE_SPEED = 8.0;
-fn getElevation(x: f32, z: f32) -> f32 {
-    let pos = quantize_vec2(vec2<f32>(x, z),PATTERN_SCALE) * 8;
+fn getElevation(wp: vec3<f32>) -> f32 {
+    let pos = quantize_vec3(wp, PATTERN_SCALE) * 8;
     let time = globals.time;
 
     // Scroll - wave
-    var a_pos = vec2<f32>(pos.x * 0.05, pos.y * 0.5) + vec2<f32>(0.0, 0.03) * time * WAVE_SPEED;
+    var a_pos = vec2<f32>(pos.x * 0.05, pos.z * 0.5) + vec2<f32>(0.0, 0.03) * time * WAVE_SPEED;
     let a_noise = simplex01(simplex_noise2(a_pos));
     let a_term = (a_noise - 0.5) * 0.3;
 
     // Wave - bottom right
-    var b_pos = vec2<f32>(pos.x * 0.2, pos.y * 0.4)+ vec2<f32>(-0.05, -0.05) * time * WAVE_SPEED;
+    var b_pos = vec2<f32>(pos.x * 0.2, pos.z * 0.4)+ vec2<f32>(-0.05, -0.05) * time * WAVE_SPEED;
     let b_noise = simplex01(simplex_noise2(b_pos));
     let b_term = (b_noise - 0.5) * 0.5;
 
     var add = a_term + b_term;
+
     return add;
 }
 
@@ -63,23 +64,22 @@ fn vertex(input: VertexInput) -> VertexOutput {
     var wp = mesh_position_local_to_world(world_from_local, vec4<f32>(input.position, 1.0)).xyz;
 
     let amp = 0.1;
-    let e0 = getElevation(wp.x, wp.z) * amp;
-    wp.y += e0;
+    let e0 = getElevation(wp) * amp;
+    //wp.y += e0;
 
-    let eps = 0.001;
-    let ex = getElevation(wp.x + eps, wp.z) * amp;
-    let ez = getElevation(wp.x, wp.z + eps) * amp;
+    // let eps = 0.001;
+    // let ex = getElevation(wp.x + eps, wp.z, 0) * amp;
+    // let ez = getElevation(wp.x, wp.z + eps, 0) * amp;
 
-    let dx = ex - e0;
-    let dz = ez - e0;
-
-    let N = normalize(vec3<f32>(-dx, 1.0, -dz));
-    out.normal = N;
+    // let dx = ex - e0;
+    // let dz = ez - e0;
+    // let N = normalize(vec3<f32>(-dx, 1.0, -dz));
+    
+    // out.normal = N;
 
     out.world_pos = wp;
-   
     out.uv = input.uv;
-    out.clip_position = position_world_to_clip(wp);
+    out.clip_position = position_world_to_clip(wp + vec3(0.0, e0, 0.0));
     return out;
 }
 
@@ -92,7 +92,7 @@ fn fragment(input: VertexOutput, @builtin(sample_index) si: u32) -> @location(0)
     var surfaceColor = vec3<f32>(0.0, 0.65, 0.9);
     var peakColor = vec3<f32>(1.0, 1.0, 1.0);
 
-    let elevation = getElevation(input.world_pos.x, input.world_pos.z);
+    let elevation = getElevation(input.world_pos);
     let highlight = smoothstep(0.28, 0.36, elevation);
     let boosted = elevation * mix(1.0, 4.0, highlight);
     let elevationFactor = (boosted - 0.1) * 0.35;
@@ -105,21 +105,33 @@ fn fragment(input: VertexOutput, @builtin(sample_index) si: u32) -> @location(0)
     let view_pos = position_world_to_view(input.world_pos);
     let water_d = view_z_to_depth_ndc(view_pos.z);
 
-    var thickness = max(scene_d+0.0012 - water_d, 0.0);
+    var thickness = max(0.0, scene_d+0.0012 - water_d);
     thickness = smoothstep(0.00, 0.002, thickness);
 
     thickness = pow(thickness, 1.2);
     
-    //return vec4(vec3(1.0)*thickness, 1.0);
+    // let quant_wp = quantize_vec3(input.world_pos, PATTERN_SCALE);
+    // let quant_scene_d = prepass_depth(position_world_to_clip(quant_wp), si);
+    // let quant_view_pos = position_world_to_view(quant_wp);
+    // let quant_water_d = view_z_to_depth_ndc(quant_view_pos.z);
+
+    // var quant_thickness = max(0.0, quant_scene_d+0.0012 - quant_water_d);
+    // quant_thickness = smoothstep(0.00, 0.002, thickness);
+    // quant_thickness = pow(quant_thickness, 1.2);
+
+    // Foam
+    if thickness > 0.58 {
+        return vec4(0.8);
+    }
+
+    //return vec4(vec3(1.0)*scene_d, 1.0);
     return vec4(color, 1.0 - thickness);
 }
 
 
 // Still need to add
-// foam at the waterlines
-// have effects at the less deep parts, so we need a better fall off
-
-// let opacity = mix(0.7, 1.0, fresnel); // More transparent when looking down
 // finalColor = mix(finalColor, finalColor * vec3(0.9, 0.95, 1.0), 0.1);
 // Boost contrast slightly for more vibrant look
 // finalColor = pow(finalColor, vec3(0.95));
+
+//get the thickness of the same quantized position used to get the elevation

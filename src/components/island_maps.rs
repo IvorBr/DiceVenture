@@ -1,5 +1,5 @@
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashSet, prelude::*};
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -106,7 +106,8 @@ pub struct Map {
     pub chunks: HashMap<IVec3, Chunk>,
     pub player_count : u32,
     pub enemy_count : u32,
-    pub leave_position : IVec3
+    pub leave_position : IVec3,
+    pub entities: HashSet<Entity>
 }
 
 impl Map {
@@ -115,7 +116,9 @@ impl Map {
         let player_count = 0;
         let enemy_count = 0;
         let leave_position = IVec3::ZERO;
-        Map { chunks, player_count, enemy_count, leave_position }
+        let entities = HashSet::new();
+
+        Map { chunks, player_count, enemy_count, leave_position, entities }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {
@@ -223,6 +226,13 @@ impl Map {
     pub fn add_player(&mut self, position: IVec3, entity: Entity){
         self.player_count += 1;
         self.add_entity_ivec3(position, Tile::new(TileType::Player, entity));
+        self.entities.insert(entity);
+    }
+
+    pub fn add_enemy(&mut self, position: IVec3, entity: Entity){
+        self.enemy_count += 1;
+        self.add_entity_ivec3(position, Tile::new(TileType::Enemy, entity));
+        self.entities.insert(entity);
     }
 
     pub fn update_position(&mut self, entity: Entity, position: IVec3, tile_type: TileType) {

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::components::humanoid::ActionState;
+use crate::components::humanoid::{ActionState, PositionUpdate};
 use crate::components::island::OnIsland;
 use crate::components::island_maps::{IslandMaps, Tile, TileType};
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
@@ -55,6 +55,7 @@ fn register_base_attack(
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
+    mut event: EventWriter<PositionUpdate>,
     mut attacks: Query<(Entity, &ChildOf, &mut CutThrough)>,
     mut parent_query: Query<(&mut Position, &mut ActionState, &OnIsland)>,
     mut island_maps: ResMut<IslandMaps>
@@ -66,7 +67,7 @@ fn perform_attack(
             *state = ActionState::Attacking;
 
             if attack.timer.finished() {
-                let mut check_pos = pos.get() + attack.direction;
+                let mut check_pos = pos.0 + attack.direction;
                 if let Some(map) = island_maps.get_map_mut(island.0) {
                     while map.get_target(check_pos).is_some() {
                         commands.trigger(DamageEvent::new(
@@ -80,9 +81,7 @@ fn perform_attack(
                     }
 
                     if map.can_move(check_pos) {
-                        map.remove_entity(pos.get());
-                        map.add_entity_ivec3(check_pos, Tile::new(TileType::Player, parent.0));
-                        pos.set(check_pos);
+                        event.write(PositionUpdate { new_position: check_pos, entity: parent.0 });
                     }
                 }
 

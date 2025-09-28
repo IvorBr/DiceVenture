@@ -21,7 +21,6 @@ use noise::{Fbm, NoiseFn};
 use crate::components::island_maps::{Map, IslandMaps, TerrainType};
 use crate::islands::core::{add_boardwalk, reserve_with_margin};
 
-
 #[derive(Component)]
 pub struct Atoll;
 
@@ -70,7 +69,7 @@ fn setup_island_server(
             let mut generator = StdRng::seed_from_u64(island_id.0);
             
             let top_tiles = map.above_water_top_tiles();
-            for _ in 0..5 {
+            for _ in 0..4 {
                 let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
                 let enemy_id = commands
                     .spawn((
@@ -86,9 +85,7 @@ fn setup_island_server(
                     ))
                     .id();
 
-                map.add_entity_ivec3(enemy_pos, Tile::new(TileType::Enemy, enemy_id));
-                map.enemy_count += 1;
-
+                map.add_enemy(enemy_pos, enemy_id);
                 commands.entity(entity).insert(EliminationObjective);
             }
         }

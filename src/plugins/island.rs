@@ -9,7 +9,6 @@ use crate::components::island_maps::IslandMaps;
 use crate::components::island_maps::TerrainType;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
-use crate::plugins::animations::IdleGraph;
 use crate::plugins::network::MakeLocal;
 use crate::components::character::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
@@ -28,7 +27,6 @@ impl Plugin for IslandPlugin {
         .add_server_event::<LeaveIsland>(Channel::Unordered)
         .replicate::<OnIsland>()
         .replicate::<Character>()
-        .replicate::<Position>()
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
         .add_systems(Update, (
@@ -74,7 +72,7 @@ fn spawn_island_player(
         }
 
         commands.entity(entity).insert((
-            Transform::from_translation(position.get().as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
+            Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
         ));
 
         let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
@@ -182,6 +180,7 @@ fn add_waiting_player(
     mut commands: Commands,
     players: Query<(Entity, &OnIsland), With<Waiting>>,
     mut islands: ResMut<IslandMaps>,
+    position_query: Query<&Position>
 ) {
     for (entity, island) in players.iter() {
         if let Some(map) = islands.maps.get_mut(&island.0) {
@@ -194,6 +193,19 @@ fn add_waiting_player(
             commands.entity(entity).insert(Position::new(spawn_pos)).remove::<Waiting>();
 
             map.add_player(spawn_pos, entity);
+
+            for entity in map.entities.iter() {
+                if let Ok(position) = position_query.get(*entity) {
+                    commands.server_trigger_targets(
+                        ToClients {
+                            mode: SendMode::BroadcastExcept(SERVER),
+                            event: ServerPositionUpdate { position: position.0 } ,
+                        },
+                        *entity,
+                    );
+                }   
+                
+            }
         }
     }
 }
@@ -290,11 +302,12 @@ fn player_leaves_island(
 ) {
     for (position, entity, owner, island) in &player_query {
         if let Some(map) = islands.get_map_mut(island.0) {
-            if position.get() == map.leave_position + IVec3::Y {
+            if position.0 == map.leave_position + IVec3::Y {
                 println!("{:?} leaves island", entity);
 
                 commands.entity(entity).despawn();
-                map.remove_entity(position.get());
+                map.remove_entity(position.0);
+                map.entities.remove(&entity);
                 map.player_count -= 1;
                 leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });    
             }

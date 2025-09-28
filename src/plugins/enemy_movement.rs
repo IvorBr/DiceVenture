@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::components::enemy::MoveRule;
 use crate::components::enemy::EnemyState;
 use crate::components::humanoid::ActionState;
+use crate::components::humanoid::PositionUpdate;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::IslandMaps;
 use crate::preludes::network_preludes::*;
@@ -25,11 +26,12 @@ impl Plugin for MovementPlugin {
 
 fn standard_mover(
     time: Res<Time>,
-    mut enemies: Query<(Entity, &mut MoveTimer, &mut Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Character>)>,
+    mut event: EventWriter<PositionUpdate>,
+    mut enemies: Query<(Entity, &mut MoveTimer, &Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Character>)>,
     players: Query<&Position, With<Character>>,
     mut islands: ResMut<IslandMaps>,
 ) {
-    for (enemy_entity, mut timer, mut enemy_pos, island, enemy_state, move_rule, action_state) in enemies.iter_mut() {
+    for (enemy_entity, mut timer, enemy_pos, island, enemy_state, move_rule, action_state) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
             timer.1 = true;
         }
@@ -45,13 +47,11 @@ fn standard_mover(
             };
 
             if let Some(Ok(target_pos)) = enemy_target {
-                let closest_offset = enemy_pos.get();
-                let path = astar(closest_offset, target_pos.get(), &map, move_rule);
+                let closest_offset = enemy_pos.0;
+                let path = astar(closest_offset, target_pos.0, &map, move_rule);
 
                 if let Some(next_step) = path.get(1) {
-                    map.remove_entity(closest_offset);
-                    map.add_entity_ivec3(*next_step, Tile::new(TileType::Enemy, enemy_entity));
-                    enemy_pos.set(*next_step);
+                    event.write(PositionUpdate { new_position: *next_step, entity: enemy_entity });
                     
                     timer.0.reset();
                     timer.1 = false;

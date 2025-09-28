@@ -103,7 +103,7 @@ fn follow_target(
     if let Ok((target_position, target_transform)) = target_query.single() {
         if let Ok(mut dolly_cam) = camera.single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            let follow_pos = target_position.map(|p| p.get().as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
+            let follow_pos = target_position.map(|p| p.0.as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
             
             let current: Vec3 = Vec3::new(pos_driver.position.x, pos_driver.position.y, pos_driver.position.z);
             let new_pos = current.lerp(follow_pos, time.delta_secs() * 15.0);

@@ -16,7 +16,7 @@ fn find_closest_in_range(players: &Query<(&Position, Entity), With<Character>>, 
     let mut closest_distance: i32 = i32::MAX;
 
     for (player_pos, player_entity) in players.iter() {
-        let distance = player_pos.get().distance_squared(enemy_pos.get());
+        let distance = player_pos.0.distance_squared(enemy_pos.0);
 
         if distance <= range * range && distance < closest_distance {
             closest_player = Some(player_entity);

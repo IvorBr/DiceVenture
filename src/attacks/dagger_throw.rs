@@ -74,7 +74,7 @@ fn perform_attack(
                 attack.hit = true;
             
                 let attack_direction = check_attack_path(
-                    pos.get(),
+                    pos.0,
                     attack.direction,
                     ATTACK_RANGE,
                     island_maps.get_map(island.0).unwrap()
@@ -94,7 +94,7 @@ fn perform_attack(
                         speed: 16.0,
                         damage: DAMAGE
                     },
-                    Transform::from_translation(pos.current.as_vec3()),
+                    Transform::from_translation(pos.0.as_vec3()),
                     OnIsland(island.0)
                 ));
             }

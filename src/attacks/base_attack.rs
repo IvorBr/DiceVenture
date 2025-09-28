@@ -72,7 +72,7 @@ fn perform_attack(
                 commands.trigger(DamageEvent::new(
                     parent.0,
                     island.0,
-                    pos.get() + attack.direction,
+                    pos.0 + attack.direction,
                     DAMAGE
                 ));
             }
