@@ -45,3 +45,6 @@ pub struct CompletedIslandObjective;
 
 #[derive(Component)]
 pub struct Chest;
+
+#[derive(Component)]
+pub struct EnterPosition(pub Vec3);

@@ -26,6 +26,9 @@ pub struct ProximityUI;
 pub struct OverworldUI;
 
 #[derive(Component)]
+pub struct OverworldIslandVisual;
+
+#[derive(Component)]
 pub struct OverworldRoot;
 
 #[derive(Debug, Deserialize, Event, Serialize)]
@@ -39,3 +42,4 @@ pub struct ServerShipPosition{
 
 #[derive(Resource, Clone, Copy)]
 pub struct WorldSeed(pub u64);
+

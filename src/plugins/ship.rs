@@ -35,7 +35,7 @@ fn spawn_overworld_ship(
     if let Ok(overworld_root) = world_root_query.single() {
         for (entity, local) in ships.iter_mut() {
             commands.entity(entity).insert((
-                Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 0.5))),
+                Mesh3d(meshes.add(Cuboid::new(2.0, 2.0, 2.0))),
                 MeshMaterial3d(materials.add(StandardMaterial {
                     base_color: Color::srgb(0.65, 0.45, 0.25),
                     ..Default::default()
@@ -86,7 +86,7 @@ fn user_ship_movement(
         }
 
         if direction != Vec3::ZERO {
-            let speed = 5.0;
+            let speed = 20.0;
             ship_transform.translation += direction.normalize() * speed * time.delta_secs();
             
             commands.client_trigger_targets(

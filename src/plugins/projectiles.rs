@@ -15,11 +15,17 @@ impl Plugin for ProjectilePlugin {
 #[derive(Component)]
 pub struct Projectile {
     pub owner: Entity,
-    pub direction: Vec3,
+    pub velocity: Vec3,
     pub traveled: f32,
     pub range: u8,
     pub speed: f32,
     pub damage: u64,
+}
+
+impl Projectile {
+    pub fn new(owner: Entity, velocity: Vec3, range: u8, speed: f32, damage: u64) -> Self {
+        Projectile { owner: owner, velocity: velocity, traveled: 0.0, range: range, speed: speed, damage: damage }
+    }
 }
 
 fn projectile_system(
@@ -30,11 +36,13 @@ fn projectile_system(
 ) {
     for (entity, mut transform, mut projectile, island) in &mut projectiles {
         let delta = projectile.speed * time.delta_secs();
+        let start = transform.translation;
+        
         projectile.traveled += delta;
 
-        transform.translation += projectile.direction * delta;
+        transform.translation += projectile.velocity * delta;
 
-        if let Some(map) = island_maps.get_map(island.0) {
+        if let Some(map) = island_maps.get_map(island.0) { //TODO: Currently we have tunneling, look into DDA
             let tile_pos = IVec3::new(transform.translation.x.round() as i32, transform.translation.y.round() as i32, transform.translation.z.round() as i32);
             let tile = map.get_tile(tile_pos);
 

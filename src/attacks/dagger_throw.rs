@@ -90,7 +90,7 @@ fn perform_attack(
                         owner: parent.0,
                         traveled: 0.0,
                         range: ATTACK_RANGE,
-                        direction: attack_direction, //Vec3::new(attack.direction.x as f32, attack.direction.y as f32, attack.direction.z as f32),
+                        velocity: attack_direction,
                         speed: 16.0,
                         damage: DAMAGE
                     },

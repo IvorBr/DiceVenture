@@ -34,81 +34,83 @@ fn init_enemy(
     enemies: Query<(Entity, &Position, &OnIsland), (With<Enemy>, Without<Transform>)>,
     enemy_shapes: Query<&Shape>,
     snake_parts: Query<&SnakePart, Without<Transform>>,
-    local_island_query: Query<&Island, With<LocalIsland>>,
+    local_island_query: Query<(Entity, &Island), With<LocalIsland>>,
 ) {
     for (entity, position, island) in &enemies {
-        if let Ok(local_island) = local_island_query.single() {
+        if let Ok((island_entity, local_island)) = local_island_query.single() {
             if island.0 != local_island.0 {
                 continue;
             }
-        }
-        
-        println!("{:?} enemy spawned", entity);
+            
+            println!("{:?} enemy spawned", entity);
 
-        let visual = commands.spawn((
-            VisualEntity,
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(200, 50, 50),
-                ..Default::default()
-            })),
-        ))
-        .id();
+            let visual = commands.spawn((
+                VisualEntity,
+                Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: Color::srgb_u8(200, 50, 50),
+                    ..Default::default()
+                })),
+            ))
+            .id();
 
-        commands.entity(entity).insert(Transform::from_translation(position.0.as_vec3())).add_child(visual).insert(VisualRef(visual));
+            commands.entity(entity)
+            .insert((Transform::from_translation(position.0.as_vec3()), ChildOf(island_entity), VisualRef(visual)))
+            .add_child(visual);
 
-        if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
-            let mut prev_entity = entity;
-            for i in 1..5 {
-                let offset_pos = position.0 - IVec3::new(i, 0, 0);
-                let next_entity = commands.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::srgb_u8(200, 50, 50),
-                        ..Default::default()
-                    })),
-                    Transform::from_xyz(
-                        offset_pos.x as f32,
-                        offset_pos.y as f32,
-                        offset_pos.z as f32,
-                    ),
-                    Position(offset_pos),
-                )).id();
+            if snake_parts.get(entity).is_ok() { //for now we just standardize a snake of size 5...
+                let mut prev_entity = entity;
+                for i in 1..5 {
+                    let offset_pos = position.0 - IVec3::new(i, 0, 0);
+                    let next_entity = commands.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        MeshMaterial3d(materials.add(StandardMaterial {
+                            base_color: Color::srgb_u8(200, 50, 50),
+                            ..Default::default()
+                        })),
+                        Transform::from_xyz(
+                            offset_pos.x as f32,
+                            offset_pos.y as f32,
+                            offset_pos.z as f32,
+                        ),
+                        Position(offset_pos),
+                    )).id();
 
-                println!("{}",next_entity);
+                    println!("{}",next_entity);
+                    commands.entity(prev_entity).insert(
+                        SnakePart {
+                            next: Some(next_entity)
+                        }
+                    );
+                    prev_entity = next_entity;
+                }
+
                 commands.entity(prev_entity).insert(
                     SnakePart {
-                        next: Some(next_entity)
+                        next: Some(Entity::PLACEHOLDER)
                     }
                 );
-                prev_entity = next_entity;
             }
 
-            commands.entity(prev_entity).insert(
-                SnakePart {
-                    next: Some(Entity::PLACEHOLDER)
+            // Spawn visual parts for each offset
+            if enemy_shapes.get(entity).is_ok() {
+                for offset in &enemy_shapes.get(entity).expect("Shape was not found.").0 {
+                    let part_position = *offset;
+                    let child = commands.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        MeshMaterial3d(materials.add(StandardMaterial {
+                            base_color: Color::srgb_u8(200, 50, 50),
+                            ..Default::default()
+                        })),
+                        Transform::from_xyz(
+                            part_position.x as f32,
+                            part_position.y as f32,
+                            part_position.z as f32,
+                        )
+                    )).id();
+
+                    commands.entity(entity).add_child(child);
                 }
-            );
-        }
-
-        // Spawn visual parts for each offset
-        if enemy_shapes.get(entity).is_ok() {
-            for offset in &enemy_shapes.get(entity).expect("Shape was not found.").0 {
-                let part_position = *offset;
-                let child = commands.spawn((
-                    Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                    MeshMaterial3d(materials.add(StandardMaterial {
-                        base_color: Color::srgb_u8(200, 50, 50),
-                        ..Default::default()
-                    })),
-                    Transform::from_xyz(
-                        part_position.x as f32,
-                        part_position.y as f32,
-                        part_position.z as f32,
-                    )
-                )).id();
-
-                commands.entity(entity).add_child(child);
             }
         }
     }

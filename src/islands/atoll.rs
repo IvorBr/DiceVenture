@@ -1,15 +1,18 @@
 
 use bevy::prelude::*;
 use noise::Perlin;
+use rand::random_range;
 use rand::seq::IndexedRandom;
 
 use crate::components::enemy::*;
 use crate::components::humanoid::*;
 use crate::components::island::EliminationObjective;
+use crate::components::island::EnterPosition;
 use crate::components::island::OnIsland;
 use crate::attacks::base_attack::BaseAttack;
 use crate::components::island::{CompletedIslandObjective, FinishedSetupIsland, GenerateIsland, MapFinishedIsland};
 use crate::components::overworld::Island;
+use crate::components::overworld::OverworldIslandVisual;
 use crate::plugins::attack::key_of;
 use crate::preludes::network_preludes::*;
 
@@ -29,7 +32,8 @@ impl Plugin for AtollPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_systems(Update, // setup island tiles
-            (generate_island_map.before(setup_island_server), 
+            (generate_island_overworld,
+            generate_island_map.before(setup_island_server), 
             setup_island_server.run_if(server_running))
         );
     }
@@ -228,4 +232,69 @@ pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<I
     }
 
     top_tiles
+}
+
+pub fn generate_island_overworld(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    new_islands: Query<(Entity, &Island, &Transform), Added<Atoll>>,
+) {
+    let island_size = 1.0;
+    for (entity, island_id, tf) in new_islands.iter() {
+        let mut generator = StdRng::seed_from_u64(island_id.0);
+
+        let mut map = Map::new();
+        generate_tiles(&mut map, island_id.0, &mut generator);
+
+        let parent = commands.spawn((OverworldIslandVisual, Transform::from_translation(Vec3::ZERO), Visibility::Visible)).id();
+        commands.entity(entity).add_child(parent).insert(EnterPosition(map.leave_position.as_vec3()/island_size + tf.translation));
+
+        for (chunk_pos, chunk) in map.chunks.iter() {
+            for (tile_index, tile) in chunk.tiles.iter().enumerate() {
+                let mut color = Color::srgb(0.9, 0.8, 0.6);
+                match tile.kind {
+                    TileType::Terrain(TerrainType::Sand) => {
+                        color = Color::srgb(0.9, 0.8, 0.6);
+                    }
+                    TileType::Terrain(TerrainType::Rock) => {
+                        color = Color::srgb(0.49, 0.51, 0.52);
+                    }
+                    TileType::Terrain(TerrainType::Boardwalk) => {
+                        color = Color::srgb_u8(100, 60, 40);
+                    }
+                    TileType::Terrain(TerrainType::PalmTree) => {
+                        color = Color::srgb_u8(88, 57, 39);
+                    }
+                    TileType::Terrain(TerrainType::TreeTrunk) => {
+                        color = Color::srgb_u8(88, 57, 39);
+                    }
+                    TileType::Terrain(TerrainType::Leaves) => {
+                        color = Color::srgb_u8(36, 80, 2);
+                    }
+                    _ => continue,
+                }
+                
+                let jitter = random_range(-0.05..=0.05);
+                let [r0, g0, b0, a] = color.to_linear().to_f32_array();
+                let r = (r0 + jitter).clamp(0.0, 1.0);
+                let g = (g0 + jitter).clamp(0.0, 1.0);
+                let b = (b0 + jitter).clamp(0.0, 1.0);
+
+                color = Color::srgba(r, g, b, a);
+                let child = commands.spawn((
+                    Mesh3d(meshes.add(Cuboid::new(1.0/island_size, 1.0/island_size, 1.0/island_size))),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color: color,
+                        ..Default::default()
+                    })),
+                    Transform::from_translation((map.chunk_to_world_coords(*chunk_pos, tile_index)).as_vec3()/island_size),
+                    Visibility::Inherited
+                )).id();
+
+                commands.entity(parent).add_child(child);
+            }
+            
+        }
+    }
 }

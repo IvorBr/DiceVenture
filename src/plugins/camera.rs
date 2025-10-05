@@ -1,7 +1,11 @@
 use dolly::prelude::*;
-use bevy::{asset::RenderAssetUsages, core_pipeline::prepass::DepthPrepass, prelude::*, render::camera::CameraProjection};
+use bevy::{core_pipeline::prepass::DepthPrepass, prelude::*};
 use mint::{Quaternion, Point3};
 use bevy::render::render_resource::*;
+use bevy::render::view::RenderLayers;
+use crate::components::overworld::Ocean;
+use crate::plugins::overworld::WATER_HEIGHT;
+use crate::GameState;
 
 #[derive(Component)]
 pub struct PlayerCamera;
@@ -13,6 +17,9 @@ pub struct CameraTarget;
 pub struct NewCameraTarget;
 
 #[derive(Component)]
+pub struct ZoomCamera(pub f32);
+
+#[derive(Component)]
 pub struct DollyCamera {
     pub rig: CameraRig,
     pub direction: u8
@@ -20,7 +27,6 @@ pub struct DollyCamera {
 
 #[derive(Component)]
 pub struct RenderCamera;
-
 
 pub const LAYER_WORLD: u8 = 0;
 pub const LAYER_WATER: u8 = 1;
@@ -54,8 +60,79 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app
+        .add_systems(OnEnter(GameState::Island), zoom_in_camera)
+        .add_systems(OnEnter(GameState::Overworld), zoom_out_camera)
         .add_systems(Startup, (setup_light, setup_cameras))
-        .add_systems(PreUpdate, (change_camera_target, follow_target, rotate_camera, update_camera));
+        .add_systems(PreUpdate, (resize_ocean_to_camera, zoom_to_distance, change_camera_target, follow_target, rotate_camera, update_camera));
+    }
+}
+
+fn resize_ocean_to_camera(
+    mut ocean_q: Query<&mut Transform, With<Ocean>>,
+    cam_q: Query<(&GlobalTransform, &DollyCamera), With<PlayerCamera>>,
+) {
+    let Ok((cam_gt, dolly)) = cam_q.single() else { return; };
+    let mut t = match ocean_q.single_mut() {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+
+    let cam_pos = cam_gt.translation();
+    t.translation.x = cam_pos.x;
+    t.translation.z = cam_pos.z;
+
+    let arm = dolly.rig.driver::<Arm>();
+    let cur = arm.offset;
+    let dist = (cur.x * cur.x + cur.y * cur.y + cur.z * cur.z).sqrt();
+
+    let target_size = (dist * 6.0).clamp(75.0, 6000.0);
+
+    let s = target_size / 75.0;
+    t.scale = Vec3::splat(s);
+    t.translation.y = WATER_HEIGHT;
+}
+
+pub fn zoom_to_distance(
+    mut q: Query<(&mut DollyCamera, &ZoomCamera)>, 
+    time: Res<Time>, 
+) {
+    let speed = 5.0;
+    for (mut dolly, zoom) in &mut q {
+        let arm = dolly.rig.driver_mut::<Arm>();
+        let cur = arm.offset;
+        let cur_len = (cur.x * cur.x + cur.y * cur.y + cur.z * cur.z).sqrt();
+        if cur_len > 0.0 {
+            let t = 1.0 - f32::exp(-speed * time.delta_secs());
+            let new_len = cur_len + (zoom.0 - cur_len) * t;
+            let dir = mint::Vector3 {
+                x: cur.x / cur_len,
+                y: cur.y / cur_len,
+                z: cur.z / cur_len,
+            };
+            arm.offset = Point3 {
+                x: dir.x * new_len,
+                y: dir.y * new_len,
+                z: dir.z * new_len,
+            }.into();
+        }
+    }
+}
+
+pub fn zoom_in_camera(
+    mut commands: Commands,
+    query: Query<Entity, With<DollyCamera>>, 
+) {
+    for entity in query.iter() {
+        commands.entity(entity).insert(ZoomCamera(18.0));
+    }
+}
+
+pub fn zoom_out_camera(
+    mut commands: Commands,
+    query: Query<Entity, With<DollyCamera>>, 
+) {
+    for entity in query.iter() {
+        commands.entity(entity).insert(ZoomCamera(18.0*6.0));
     }
 }
 
@@ -80,16 +157,15 @@ fn setup_light(
 
 fn change_camera_target(
     mut commands: Commands,
-    new_targets: Query<Entity, Added<NewCameraTarget>>,
-    old_targets: Query<Entity, With<CameraTarget>>,
+    new_targets: Query<(Entity, &Transform), Added<NewCameraTarget>>,
+    old_targets: Query<(Entity, &Transform), With<CameraTarget>>,
 ) {
-    if let Ok(entity) = new_targets.single() {
-        println!("{entity:?} new camera target");
+    if let Ok((entity, tf)) = new_targets.single() {
         commands.entity(entity)
             .remove::<NewCameraTarget>()
             .insert(CameraTarget);
 
-        for entity in old_targets.iter() {
+        for (entity, tf) in old_targets.iter() {
             commands.entity(entity).remove::<CameraTarget>();
         }
     }
@@ -97,13 +173,13 @@ fn change_camera_target(
 
 fn follow_target(
     mut camera: Query<&mut DollyCamera, With<PlayerCamera>>, 
-    target_query: Query<(Option<&crate::components::humanoid::Position>, &Transform), (With<CameraTarget>, Without<PlayerCamera>)>,
+    target_query: Query<&GlobalTransform, (With<CameraTarget>, Without<PlayerCamera>)>,
     time: Res<Time>          
 ) {
-    if let Ok((target_position, target_transform)) = target_query.single() {
+    if let Ok(target_transform) = target_query.single() {
         if let Ok(mut dolly_cam) = camera.single_mut() {
             let pos_driver = dolly_cam.rig.driver_mut::<Position>();
-            let follow_pos = target_position.map(|p| p.0.as_vec3()).unwrap_or(target_transform.translation); // use position if not present use transform
+            let follow_pos = target_transform.translation();
             
             let current: Vec3 = Vec3::new(pos_driver.position.x, pos_driver.position.y, pos_driver.position.z);
             let new_pos = current.lerp(follow_pos, time.delta_secs() * 15.0);
@@ -142,10 +218,9 @@ pub fn update_camera(
     }
 }
 
-use bevy::render::view::RenderLayers;
 
 fn setup_cameras(mut commands: Commands) {
-    let transform = Transform::from_xyz(0.0, 12.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y);
+    let transform = Transform::from_translation(Vec3::new(0.0, 12.0, 10.0)).looking_at(Vec3::ZERO, Vec3::Y);
     let rotation = transform.rotation;
 
     commands.spawn((

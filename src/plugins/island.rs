@@ -38,87 +38,85 @@ impl Plugin for IslandPlugin {
 
 fn client_island_cleanup(
     mut commands: Commands,
-    player_query: Query<Entity, With<Character>>,
-    enemy_query: Query<Entity, With<Enemy>>,
-    islandroot_query: Query<Entity, With<IslandRoot>>
+    islandroot_query: Query<Entity, With<IslandRoot>>,
+    island_entities_query: Query<Entity, With<VisualEntity>>,
 ) {
     //clean up visuals
     if let Ok(island_root) = islandroot_query.single() {
         commands.entity(island_root).despawn();
     }
 
-    //clean up players
-    for entity in player_query.iter() {
-        commands.entity(entity).remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>, Transform)>();
-    }
-
-    //clean up enemies
-    for entity in enemy_query.iter() {
-        commands.entity(entity).remove::<(Mesh3d, MeshMaterial3d<StandardMaterial>, Transform)>();
+    //clean up entities
+    for entity in island_entities_query.iter() {
+        commands.entity(entity).despawn();
     }
 }
 
 fn spawn_island_player(
     mut commands: Commands,
     players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
-    local_island_query: Query<&Island, With<LocalIsland>>,
+    local_island_query: Query<(Entity, &Island, &Transform), With<LocalIsland>>,
     assets: Res<AssetServer>,
 ) {
     for (entity, position, local, island) in players.iter() {
-        if let Ok(local_island) = local_island_query.single() {
+        if let Ok((island_entity, local_island, island_position)) = local_island_query.single() {
             if island.0 != local_island.0 {
                 continue;
             }
-        }
+            
+            println!("Spawn_pos: {}, island_pos: {}", position.0.as_vec3(), island_position.translation.round());
+            commands.entity(entity).insert((
+                Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
+            ));
 
-        commands.entity(entity).insert((
-            Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
-        ));
+            let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
+            let visual = commands.spawn((
+                SceneRoot(scene),
+                VisualEntity,
+                Visibility::default(),
+                AnimationPlayer::default()
+            )).id();
 
-        let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
-        let visual = commands.spawn((
-            SceneRoot(scene),
-            VisualEntity,
-            Visibility::default(),
-            AnimationPlayer::default()
-        ))
-        .id();
-
-        commands.entity(entity)
-            .add_child(visual)
-            .insert(VisualRef(visual));
-
-        if local.is_some() { 
-            commands.entity(entity).insert(NewCameraTarget);
+            commands.entity(entity)
+                .add_child(visual)
+                .insert(VisualRef(visual))
+                .insert(ChildOf(island_entity));
+            
+            if local.is_some() { 
+                commands.entity(entity).insert(NewCameraTarget);
+            }
         }
     }
 }
 
+// Spawn_pos: [2, 2, 26], island_pos: [0, 0, 0]
+// new tf[2, 2, 26]
+// old tf[2.4773533, 0.3, 27.323788]
+
 fn visualize_island(
     mut commands: Commands,
-    islands: Query<(Entity, &Island), (Without<GenerateIsland>, With<VisualizeIsland>)>,
+    islands: Query<(Entity, &Island, &Transform), (Without<GenerateIsland>, With<VisualizeIsland>)>,
     mut island_maps: ResMut<IslandMaps>,
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<StandardMaterial>>,
     assets: Res<AssetServer>,
 ){    
-    if let Ok((entity, island)) = islands.single() {
-        let island_root = commands
+    if let Ok((entity, island, island_position)) = islands.single() {
+        let island_visual_root = commands
         .spawn((
             IslandRoot,
-            Transform::from_xyz(0.0, 0.0, 0.0),
+            Transform::from_translation(island_position.translation.round()),
             InheritedVisibility::VISIBLE
         )).id();
+
         let map = island_maps.maps.get_mut(&island.0).unwrap();
         for (pos, chunk) in map.chunks.iter() {
             for (idx, tile) in chunk.tiles.iter().enumerate() {
                 if !matches!(tile.kind, TileType::Terrain(_)) {
                     continue;
                 }
+
                 let position = map.chunk_to_world_coords(*pos, idx);
-                let mut mesh : Handle<Mesh> = Handle::default();
-                let mut material : Handle<StandardMaterial> = Handle::default();
-                let mut scale : Vec3 = Vec3::ONE;
+                let mut mesh: Handle<Mesh> = Handle::default();
+                let mut material: Handle<StandardMaterial> = Handle::default();
 
                 match tile.kind {
                     TileType::Terrain(TerrainType::Sand) => {
@@ -128,14 +126,6 @@ fn visualize_island(
                     TileType::Terrain(TerrainType::Rock) => {
                         mesh = assets.load("blocks/RockBlock.glb#Mesh0/Primitive0").clone();
                         material = assets.load("blocks/RockBlock.glb#Material0").clone();
-
-                        if let Some(mat_asset) = materials.get_mut(&material) {
-                            let mut mat = mat_asset.clone();
-                            let j = rand::random_range(0.90..=1.10);
-                            let color = mat.base_color.to_linear();
-                            mat.base_color = Color::srgba(color.red * j, color.green * j, color.blue * j, color.alpha);
-                            material = materials.add(mat);
-                        }
                     }
                     TileType::Terrain(TerrainType::Boardwalk) => {
                         mesh = assets.load("blocks/BoardWalkBlock.glb#Mesh0/Primitive0").clone();
@@ -145,33 +135,17 @@ fn visualize_island(
                         mesh = assets.load("blocks/PalmTreeTrunkBlock.glb#Mesh0/Primitive0").clone();
                         material = assets.load("blocks/PalmTreeTrunkBlock.glb#Material0").clone();
                     }
-                    TileType::Terrain(TerrainType::Leaves) => {
-                        mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-                        material = materials.add(StandardMaterial {base_color: Color::srgb_u8(36, 80, 2), ..Default::default()});
-
-                    }
                     _ => ()
                 }
 
                 commands.spawn((
                     Mesh3d(mesh),
                     MeshMaterial3d(material),
-                    Transform::from_xyz(position.x as f32, position.y as f32, position.z as f32).with_scale(scale),
-                )).insert(ChildOf(island_root));
+                    Transform::from_translation(position.as_vec3()),
+                )).insert(ChildOf(island_visual_root));
             }
         }
 
-        // let shoreline_tiles: Vec<IVec3> = map.shore_tiles();
-        // for tile in shoreline_tiles.iter() {
-        //     commands.spawn((
-        //         Mesh3d(meshes.add(Cuboid::new(1.05, 1.05, 1.05))),
-        //         MeshMaterial3d(materials.add(StandardMaterial {
-        //             base_color: Color::srgb(1.0, 1.0, 0.6),
-        //             ..Default::default()
-        //         })),
-        //         Transform::from_xyz(tile.x as f32, tile.y as f32, tile.z as f32),
-        //     )).insert(ChildOf(island_root));
-        // }
         commands.entity(entity).remove::<VisualizeIsland>();
     }
 }  

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::view::RenderLayers;
-use crate::components::island::{EnteredIsland, GenerateIsland, VisualizeIsland};
+use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
 use crate::islands::atoll::Atoll;
 use crate::GameState;
@@ -57,13 +57,13 @@ impl Plugin for OverworldPlugin {
 fn overworld_cleanup(
     mut commands: Commands,
     ui_query: Query<Entity, With<OverworldUI>>,
-    mut overworld_query: Query<&mut Visibility, With<OverworldRoot>>,
+    mut overworld_query: Query<&mut Visibility, With<OverworldIslandVisual>>,
 ) {
     if let Ok(ui_entity) = ui_query.single() {
         commands.entity(ui_entity).despawn();
     }
 
-    if let Ok(mut overworld_visiblity) = overworld_query.single_mut() {
+    for mut overworld_visiblity in overworld_query.iter_mut() {
         *overworld_visiblity = Visibility::Hidden;
     }
 }
@@ -95,20 +95,20 @@ fn spawn_overworld_ui(
 
 fn activate_overworld(
     mut commands: Commands,
-    mut overworld_query: Query<&mut Visibility, With<OverworldRoot>>,
+    mut overworld_query: Query<&mut Visibility, With<OverworldIslandVisual>>,
     ship_query: Query<Entity, (With<Ship>, With<LocalPlayer>)>,
     island_query: Query<Entity, With<LocalIsland>>
 ) {
-    if let Ok(mut overworld_visiblity) = overworld_query.single_mut() {
+    for mut overworld_visiblity in overworld_query.iter_mut() {
         *overworld_visiblity = Visibility::Visible;
-        
-        if let Ok(ship_entity) = ship_query.single() {
-            commands.entity(ship_entity).insert(NewCameraTarget);
-        }
+    }
 
-        if let Ok(local_island) = island_query.single() {
-            commands.entity(local_island).remove::<LocalIsland>();
-        }
+    if let Ok(ship_entity) = ship_query.single() {
+        commands.entity(ship_entity).insert(NewCameraTarget);
+    }
+
+    if let Ok(local_island) = island_query.single() {
+        commands.entity(local_island).remove::<LocalIsland>();
     }
 }
 
@@ -172,27 +172,22 @@ fn spawn_overworld(
 
     // starter island
     commands
-        .spawn((
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(100, 255, 100),
-                ..Default::default()
-            })),
-            Transform::from_xyz(0.0, 0.2, 0.0),
-            StarterIsland,
-            Island(0),
-            Visibility::Inherited,
-            Atoll
-        ))
-        .observe(on_clicked_island)
-        .insert(ChildOf(overworld_root));
+    .spawn((
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        StarterIsland,
+        Island(0),
+        Visibility::Inherited,
+        Atoll
+    ))
+    .observe(on_clicked_island)
+    .insert(ChildOf(overworld_root));
 
     let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
-    let positions = poisson_disk_sample_2d( //should end up basing this on a seed and chunk, since now we are only doing this in a small range
+    let positions = poisson_disk_sample_2d(
         Vec2::ZERO,
-        5.0,     // min distance between islands
+        5.0 * 8.0,     // min distance between islands
         20,      // number of islands
-        30.0,    // spread range
+        30.0 * 8.0,    // spread range
         &mut rng,
     );
 
@@ -208,12 +203,7 @@ fn spawn_overworld(
         // Spawn the island entity
         commands
         .spawn((
-            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color,
-                ..Default::default()
-            })),
-            Transform::from_xyz(pos.x, 0.2, pos.y),
+            Transform::from_xyz(pos.x, 0.0, pos.y),
             Visibility::Inherited, 
             Island((i + 1) as u64),
             island_type
@@ -225,29 +215,29 @@ fn spawn_overworld(
 
 fn move_ocean(
     mut ocean: Query<&mut Transform, With<Ocean>>,
-    target: Query<&Transform, (With<CameraTarget>, Without<Ocean>)>
+    target: Query<&GlobalTransform, (With<CameraTarget>, Without<Ocean>)>
 ){
     if let Ok(transform) = target.single() {
         for mut ocean_transform in &mut ocean {
-            ocean_transform.translation.x = transform.translation.x;
-            ocean_transform.translation.z = transform.translation.z;
+            ocean_transform.translation.x = transform.translation().x;
+            ocean_transform.translation.z = transform.translation().z;
         }
     }
 }
 
 fn island_proximity_check(
     position: Transform,
-    islands: Vec<(Transform, u64, Entity)> 
+    islands: Vec<(Vec3, u64, Entity)> 
 ) -> Option<(u64, f32, Entity)> {
     if islands.is_empty() {
         return None;
     }
 
-    let (island_transform, mut best_island, mut best_island_enitity) = islands[0];
-    let mut best_distance = position.translation.distance_squared(island_transform.translation);
+    let (island_enter_position, mut best_island, mut best_island_enitity) = islands[0];
+    let mut best_distance = position.translation.distance_squared(island_enter_position);
 
-    for (transform, island_id, entity) in islands.iter().skip(1) {
-        let distance = position.translation.distance_squared(transform.translation);
+    for (enter_position, island_id, entity) in islands.iter().skip(1) {
+        let distance = position.translation.distance_squared(*enter_position);
         if distance < best_distance {
             best_distance = distance;
             best_island = *island_id;
@@ -262,17 +252,17 @@ fn island_proximity(
     mut commands: Commands,
     mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
     ship_query: Query<&Transform, (With<Ship>, With<LocalPlayer>)>,
-    island_query: Query<(&Transform, &Island, Entity)>, //TODO: CURRENTLY DOES ALL ISLANDS!! SHOULD JUST BE THE CURRENT CHUNK
+    island_query: Query<(&EnterPosition, &Island, Entity)>, //TODO: CURRENTLY DOES ALL ISLANDS!! SHOULD JUST BE THE CURRENT CHUNK
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<NextState<GameState>>,
     mut player_enter_event: EventWriter<EnteredIsland>
 ) {
     if let Ok(ship_transform) = ship_query.single() {
-        let island_transforms: Vec<(Transform, u64, Entity)> = island_query.iter().map(|(t, i, e)| (*t, i.0, e)).collect();
+        let island_transforms: Vec<(Vec3, u64, Entity)> = island_query.iter().map(|(t, i, e)| (t.0, i.0, e)).collect();
         
         if let Some((island_id, closest_distance, island_entity)) = island_proximity_check(*ship_transform, island_transforms) {
             if let Ok(mut proximity_ui_visibility) = proximity_ui_query.single_mut() {
-                if closest_distance < 2.0 {
+                if closest_distance < 4.0 {
                     *proximity_ui_visibility = Visibility::Inherited;
 
                     if keyboard_input.pressed(KeyCode::KeyF) {
