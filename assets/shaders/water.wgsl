@@ -1,6 +1,6 @@
 #import bevy_pbr::{
     mesh_view_bindings::{globals, view},
-    view_transformations::{position_world_to_clip, position_world_to_view, view_z_to_depth_ndc},
+    view_transformations::{position_ndc_to_world, frag_coord_to_ndc, position_world_to_clip, position_world_to_view, view_z_to_depth_ndc, depth_ndc_to_view_z},
     mesh_functions::{get_world_from_local, mesh_position_local_to_world},
     prepass_utils::prepass_depth
 }
@@ -37,7 +37,7 @@ fn simplex01(n: f32) -> f32 { return n * 0.5 + 0.5; }
 
 const PATTERN_SCALE = 10.0;
 const WAVE_SPEED = 8.0;
-fn getElevation(wp: vec3<f32>) -> f32 {
+fn getElevation(wp: vec3<f32>) -> f32 {    
     let pos = quantize_vec3(wp, PATTERN_SCALE) * 8;
     let time = globals.time;
 
@@ -79,7 +79,7 @@ fn vertex(input: VertexInput) -> VertexOutput {
 
     out.world_pos = wp;
     out.uv = input.uv;
-    out.clip_position = position_world_to_clip(wp + vec3(0.0, e0, 0.0));
+    out.clip_position = position_world_to_clip(wp + vec3<f32>(0, e0,0));
     return out;
 }
 
@@ -102,30 +102,22 @@ fn fragment(input: VertexOutput, @builtin(sample_index) si: u32) -> @location(0)
 
     // Water depth
     let scene_d = prepass_depth(input.clip_position, si);
-    let view_pos = position_world_to_view(input.world_pos);
-    let water_d = view_z_to_depth_ndc(view_pos.z);
+    let ndc = frag_coord_to_ndc(input.clip_position);
+    let ndc_pos = vec3<f32>(ndc.xy, scene_d);
+    let scene_world = position_ndc_to_world(ndc_pos);
 
-    var thickness = max(0.0, scene_d+0.0012 - water_d);
-    thickness = smoothstep(0.00, 0.002, thickness);
+    let water_y  = input.world_pos.y;
+    let ground_y = scene_world.y;
+    var thickness_m = (water_y - ground_y)/4 + 0.2;
+    thickness_m = pow(thickness_m, 0.5);
 
-    thickness = pow(thickness, 1.2);
-    
-    // let quant_wp = quantize_vec3(input.world_pos, PATTERN_SCALE);
-    // let quant_scene_d = prepass_depth(position_world_to_clip(quant_wp), si);
-    // let quant_view_pos = position_world_to_view(quant_wp);
-    // let quant_water_d = view_z_to_depth_ndc(quant_view_pos.z);
-
-    // var quant_thickness = max(0.0, quant_scene_d+0.0012 - quant_water_d);
-    // quant_thickness = smoothstep(0.00, 0.002, thickness);
-    // quant_thickness = pow(quant_thickness, 1.2);
 
     // Foam
-    if thickness > 0.58 {
-        return vec4(0.8);
+    if thickness_m < 0.46 {
+        return vec4(0.75);
     }
 
-    //return vec4(vec3(1.0)*scene_d, 1.0);
-    return vec4(color, 1.0 - thickness);
+    return vec4(color, thickness_m);
 }
 
 
