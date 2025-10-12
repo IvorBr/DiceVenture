@@ -85,7 +85,8 @@ fn setup_island_server(
                         Position::new(enemy_pos),
                         MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
                         OnIsland(island_id.0),
-                        RangeAggro(8)
+                        RangeAggro(8),
+                        Damage { value: 10 }
                     ))
                     .id();
 
@@ -252,7 +253,7 @@ pub fn generate_island_overworld(
 
         for (chunk_pos, chunk) in map.chunks.iter() {
             for (tile_index, tile) in chunk.tiles.iter().enumerate() {
-                let mut color = Color::srgb(0.9, 0.8, 0.6);
+                let mut color: Color;
                 match tile.kind {
                     TileType::Terrain(TerrainType::Sand) => {
                         color = Color::srgb(0.9, 0.8, 0.6);
@@ -265,6 +266,18 @@ pub fn generate_island_overworld(
                     }
                     TileType::Terrain(TerrainType::PalmTree) => {
                         color = Color::srgb_u8(88, 57, 39);
+
+                        let child = commands.spawn((
+                            Mesh3d(meshes.add(Cuboid::new(1.0/island_size, 1.0/island_size, 1.0/island_size))),
+                            MeshMaterial3d(materials.add(StandardMaterial {
+                                base_color: Color::srgb_u8(36, 80, 2),
+                                ..Default::default()
+                            })),
+                            Transform::from_translation((map.chunk_to_world_coords(*chunk_pos, tile_index) + IVec3::Y).as_vec3()/island_size),
+                            Visibility::Inherited
+                        )).id();
+
+                        commands.entity(parent).add_child(child);
                     }
                     TileType::Terrain(TerrainType::TreeTrunk) => {
                         color = Color::srgb_u8(88, 57, 39);

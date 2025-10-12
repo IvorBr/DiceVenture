@@ -1,4 +1,3 @@
-use bevy::animation::RepeatAnimation;
 use bevy::prelude::*;
 use rand::seq::IndexedRandom;
 
@@ -31,7 +30,7 @@ impl Plugin for IslandPlugin {
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
         .add_systems(Update, (
             (player_enters_island, player_leaves_island, elimination_island_objective).run_if(server_running),
-            (spawn_island_player, client_player_leaves_island).in_set(IslandSet)
+            (spawn_player_island, client_player_leaves_island).in_set(IslandSet)
         ));
     }
 }
@@ -52,19 +51,18 @@ fn client_island_cleanup(
     }
 }
 
-fn spawn_island_player(
+fn spawn_player_island(
     mut commands: Commands,
     players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
-    local_island_query: Query<(Entity, &Island, &Transform), With<LocalIsland>>,
+    local_island_query: Query<(Entity, &Island), With<LocalIsland>>,
     assets: Res<AssetServer>,
 ) {
     for (entity, position, local, island) in players.iter() {
-        if let Ok((island_entity, local_island, island_position)) = local_island_query.single() {
+        if let Ok((island_entity, local_island)) = local_island_query.single() {
             if island.0 != local_island.0 {
                 continue;
             }
             
-            println!("Spawn_pos: {}, island_pos: {}", position.0.as_vec3(), island_position.translation.round());
             commands.entity(entity).insert((
                 Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
             ));
@@ -88,10 +86,6 @@ fn spawn_island_player(
         }
     }
 }
-
-// Spawn_pos: [2, 2, 26], island_pos: [0, 0, 0]
-// new tf[2, 2, 26]
-// old tf[2.4773533, 0.3, 27.323788]
 
 fn visualize_island(
     mut commands: Commands,
@@ -201,6 +195,7 @@ fn player_enters_island(
         let player_entity = commands.spawn((
             Character,
             Health::new(200),
+            Damage { value: 20 },
             OwnedBy(*client_entity),
             Waiting,
             OnIsland(island_id),

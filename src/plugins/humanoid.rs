@@ -136,7 +136,9 @@ fn animate_movement(
             *action_state = ActionState::Moving;
 
         } else {
+            //println!("TF: {}, POS: {}", transform.translation, target);
             transform.translation = target;
+
             *action_state = ActionState::Idle;
         }
     }

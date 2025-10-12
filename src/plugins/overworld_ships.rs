@@ -1,27 +1,39 @@
 use bevy::prelude::*;
-use bevy_replicon::prelude::{AppRuleExt, Channel, ClientTriggerAppExt, ClientTriggerExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
-use crate::components::character::LocalPlayer;
-use crate::OverworldSet;
-use crate::components::overworld::*;
-use crate::plugins::camera::{DollyCamera, NewCameraTarget, PlayerCamera};
+use bevy_replicon::prelude::{Channel, ClientTriggerAppExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
 
-pub struct ShipPlugin;
-impl Plugin for ShipPlugin {
+use crate::{components::{character::LocalPlayer, enemy::Enemy, overworld::{ClientShipPosition, Island, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}}, plugins::camera::NewCameraTarget, OverworldSet};
+
+pub struct OverworldShipPlugin;
+impl Plugin for OverworldShipPlugin {
     fn build(&self, app: &mut App) {
         app
-        .replicate::<Ship>()
         .add_client_trigger::<ClientShipPosition>(Channel::Unreliable)
         .add_server_trigger::<ServerShipPosition>(Channel::Unreliable)
         .add_observer(server_ship_move_update)
         .add_observer(client_ship_move_update)
         .add_systems(
             Update,
-            (   (
-                user_ship_movement,
+            (
+                spawn_ships,
+                (
                 spawn_overworld_ship,
+                move_enemy_patrol_ship,
                 ).in_set(OverworldSet),
             )
         );
+    }
+}
+
+fn spawn_ships(
+    mut commands: Commands,
+    island_query: Query<Entity, Added<Island>>
+){
+    for island in island_query.iter() {
+        commands.spawn((
+            Ship,
+            Enemy,
+            PatrolIsland(island)
+        ));
     }
 }
 
@@ -51,50 +63,29 @@ fn spawn_overworld_ship(
     }
 }
 
-fn user_ship_movement(
-    time: Res<Time>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    camera: Query<&DollyCamera, With<PlayerCamera>>,
-
-    mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>)>,
-    mut commands: Commands
+//TODO: Have ships move between allegiance islands, or patrol around them
+fn move_enemy_patrol_ship(
+    mut commands: Commands,
+    ships: Query<(Entity, &PatrolIsland), (With<Ship>, With<Enemy>)>,
+    island_transform_query: Query<&Transform, With<Island>>
 ) {
-    if let Ok((entity, mut ship_transform)) = ship.single_mut() {
-        let mut direction = Vec3::ZERO;
+    for (ship_entity, patrol_island) in ships.iter() {
+        if let Ok(island_transform) = island_transform_query.get(patrol_island.0) {
+            let new_position = island_transform.translation - 20.0 * Vec3::X;
 
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            direction.z -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            direction.z += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            direction.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            direction.x += 1.0;
+            commands.server_trigger_targets(
+                ToClients {
+                    mode: SendMode::Broadcast,
+                    event: ServerShipPosition {
+                        position: new_position,
+                    }
+                },
+                ship_entity
+            ); 
         }
         
-        if let Ok(camera) = camera.single() {
-            direction = match camera.direction {
-                0 => direction,
-                1 => Vec3::new(direction.z, 0.0, -direction.x),
-                2 => Vec3::new(-direction.x, 0.0, -direction.z),
-                3 => Vec3::new(-direction.z, 0.0, direction.x),
-                _ => direction,
-            };
-        }
-
-        if direction != Vec3::ZERO {
-            let speed = 20.0;
-            ship_transform.translation += direction.normalize() * speed * time.delta_secs();
-            
-            commands.client_trigger_targets(
-                ClientShipPosition(ship_transform.translation),
-                entity
-            );
-        }
     }
+    
 }
 
 fn client_ship_move_update(
@@ -113,10 +104,15 @@ fn server_ship_move_update(
     commands.server_trigger_targets(ToClients {
             mode: SendMode::BroadcastExcept(trigger.client_entity),
             event: ServerShipPosition {
-                client_entity: trigger.client_entity,
                 position: trigger.0,
             }
         },
         trigger.target()
     ); 
+}
+
+fn enter_ship(
+
+){
+    
 }

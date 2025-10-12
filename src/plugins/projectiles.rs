@@ -8,7 +8,7 @@ pub struct ProjectilePlugin;
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_systems(PreUpdate, (projectile_system));
+        .add_systems(PreUpdate, projectile_system);
     }
 }
 
@@ -36,7 +36,6 @@ fn projectile_system(
 ) {
     for (entity, mut transform, mut projectile, island) in &mut projectiles {
         let delta = projectile.speed * time.delta_secs();
-        let start = transform.translation;
         
         projectile.traveled += delta;
 

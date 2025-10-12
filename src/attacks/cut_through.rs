@@ -1,12 +1,13 @@
 use bevy::prelude::*;
-use crate::components::humanoid::{ActionState, PositionUpdate};
+use crate::attacks::core::calculate_damage;
+use crate::components::humanoid::{ActionState, Damage, PositionUpdate};
 use crate::components::island::OnIsland;
-use crate::components::island_maps::{IslandMaps, Tile, TileType};
+use crate::components::island_maps::{IslandMaps};
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
-const DAMAGE: u64 = 20;
+const DAMAGE: u64 = 150;
 
 #[derive(Component)]
 #[require(Interruptable)]
@@ -57,13 +58,13 @@ fn perform_attack(
     mut commands: Commands,
     mut event: EventWriter<PositionUpdate>,
     mut attacks: Query<(Entity, &ChildOf, &mut CutThrough)>,
-    mut parent_query: Query<(&mut Position, &mut ActionState, &OnIsland)>,
+    mut parent_query: Query<(&mut Position, &mut ActionState, &OnIsland, &Damage)>,
     mut island_maps: ResMut<IslandMaps>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
         attack.timer.tick(time.delta());
 
-        if let Ok((mut pos, mut state, island)) = parent_query.get_mut(parent.0) {
+        if let Ok((mut pos, mut state, island, damage)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
 
             if attack.timer.finished() {
@@ -74,7 +75,7 @@ fn perform_attack(
                             parent.0,
                             island.0,
                             check_pos,
-                            DAMAGE
+                            calculate_damage(damage.value, DAMAGE)
                         ));
 
                         check_pos += attack.direction;

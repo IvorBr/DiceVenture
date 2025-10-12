@@ -1,10 +1,5 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use bevy_replicon::prelude::Replicated;
-
-#[derive(Component, Serialize, Deserialize, Debug)]
-#[require(Replicated)]
-pub struct Ship;
 
 #[derive(Component)]
 pub struct Ocean;
@@ -36,7 +31,6 @@ pub struct ClientShipPosition(pub Vec3);
 
 #[derive(Debug, Deserialize, Event, Serialize)]
 pub struct ServerShipPosition{
-    pub client_entity: Entity,
     pub position: Vec3
 }
 

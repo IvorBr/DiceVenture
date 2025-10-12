@@ -1,11 +1,12 @@
 use bevy::prelude::*;
-use crate::components::humanoid::{ActionState, VisualEntity, VisualRef};
+use crate::attacks::core::calculate_damage;
+use crate::components::humanoid::{ActionState, Damage, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
 
-const DAMAGE: u64 = 10;
+const DAMAGE: u64 = 100;
 
 #[derive(Component)]
 #[require(Interruptable)]
@@ -55,13 +56,13 @@ fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
     mut attacks: Query<(Entity, &ChildOf, &mut BaseAttack)>,
-    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland)>,
+    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland, &Damage)>,
     visual_query: Query<&VisualRef>,
     mut transform_query: Query<(&mut Transform, &GlobalTransform), With<VisualEntity>>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
         let mut t = 0.0;
-        if let Ok((pos, mut state, island)) = parent_query.get_mut(parent.0) { //probably missing visual, globaltransform, or something when server is not on island...
+        if let Ok((pos, mut state, island, damage)) = parent_query.get_mut(parent.0) { //probably missing visual, globaltransform, or something when server is not on island...
             //logic
             *state = ActionState::Attacking;
             attack.timer.tick(time.delta());
@@ -73,7 +74,7 @@ fn perform_attack(
                     parent.0,
                     island.0,
                     pos.0 + attack.direction,
-                    DAMAGE
+                    calculate_damage(damage.value, DAMAGE)
                 ));
             }
 

@@ -319,7 +319,7 @@ fn inventory_update(
                 ))
                 .with_children(|item| {
                     item.spawn((
-                        Text::new(format!("{} ×{}", stack.id, stack.qty)),
+                        Text::new(format!("{} x {}", stack.id, stack.qty)),
                         TextColor(Color::WHITE),
                         TextFont {
                             font_size: 14.0,

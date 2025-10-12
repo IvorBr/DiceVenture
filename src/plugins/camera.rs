@@ -124,6 +124,7 @@ pub fn zoom_in_camera(
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert(ZoomCamera(18.0));
+        //set camera state to zoomed in
     }
 }
 
@@ -133,6 +134,7 @@ pub fn zoom_out_camera(
 ) {
     for entity in query.iter() {
         commands.entity(entity).insert(ZoomCamera(18.0*6.0));
+        //set camera state to zoomed out
     }
 }
 
@@ -157,15 +159,15 @@ fn setup_light(
 
 fn change_camera_target(
     mut commands: Commands,
-    new_targets: Query<(Entity, &Transform), Added<NewCameraTarget>>,
-    old_targets: Query<(Entity, &Transform), With<CameraTarget>>,
+    new_targets: Query<Entity, Added<NewCameraTarget>>,
+    old_targets: Query<Entity, With<CameraTarget>>,
 ) {
-    if let Ok((entity, tf)) = new_targets.single() {
+    if let Ok(entity) = new_targets.single() {
         commands.entity(entity)
             .remove::<NewCameraTarget>()
             .insert(CameraTarget);
 
-        for (entity, tf) in old_targets.iter() {
+        for entity in old_targets.iter() {
             commands.entity(entity).remove::<CameraTarget>();
         }
     }

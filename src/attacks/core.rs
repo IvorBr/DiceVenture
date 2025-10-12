@@ -49,3 +49,7 @@ pub fn check_attack_path(
 
     direction.as_vec3() + vector
 }
+
+pub fn calculate_damage(base_damage: u64, multiplier: u64) -> u64 {
+    base_damage * multiplier / 100
+}

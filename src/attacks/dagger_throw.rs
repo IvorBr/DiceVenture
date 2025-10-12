@@ -6,11 +6,11 @@ use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec
 use crate::plugins::projectiles::Projectile;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
-use crate::attacks::core::check_attack_path;
+use crate::attacks::core::{calculate_damage, check_attack_path};
+use crate::components::humanoid::Damage;
 
-const DAMAGE: u64 = 8;
+const DAMAGE: u64 = 50;
 const ATTACK_RANGE : u8 = 8;
-
 
 #[derive(Component)]
 #[require(Interruptable)]
@@ -63,10 +63,10 @@ fn perform_attack(
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut attacks: Query<(Entity, &ChildOf, &mut DaggerThrow)>,
-    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland)>,
+    mut parent_query: Query<(&Position, &mut ActionState, &OnIsland, &Damage)>,
 ) {
         for (child_entity, parent, mut attack) in &mut attacks {
-        if let Ok((pos, mut state, island)) = parent_query.get_mut(parent.0) {
+        if let Ok((pos, mut state, island, damage)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
             attack.timer.tick(time.delta());
 
@@ -92,7 +92,7 @@ fn perform_attack(
                         range: ATTACK_RANGE,
                         velocity: attack_direction,
                         speed: 16.0,
-                        damage: DAMAGE
+                        damage: calculate_damage(damage.value, DAMAGE)
                     },
                     Transform::from_translation(pos.0.as_vec3()),
                     OnIsland(island.0)

@@ -18,12 +18,13 @@ use plugins::enemy::EnemyPlugin;
 use plugins::island_controls::CharacterPlugin;
 
 use plugins::overworld::OverworldPlugin;
-use plugins::ship::ShipPlugin;
+use plugins::player_ship::PlayerShipPlugin;
 use rand::Rng;
 use crate::components::overworld::WorldSeed;
 use crate::plugins::animations::AnimationsPlugin;
 use crate::plugins::attack::AttackPlugin;
 use crate::plugins::damage_numbers::DamageNumbersPlugin;
+use crate::plugins::overworld_ships::OverworldShipPlugin;
 use crate::plugins::player::PlayerPlugin;
 use crate::plugins::ui::UIPlugin;
 
@@ -70,7 +71,8 @@ impl Plugin for AppPlugin {
             UIPlugin,
             
             OverworldPlugin,
-            ShipPlugin,
+            PlayerShipPlugin,
+            OverworldShipPlugin,
 
             IslandPlugin,
             CharacterPlugin,

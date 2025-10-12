@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use bevy::prelude::*;
-use std::{collections::HashMap, default};
+use std::{collections::HashMap};
 use crate::plugins::attack::AttackId;
 use bitflags::bitflags;
 
@@ -29,6 +29,11 @@ impl Default for Health {
     fn default() -> Self {
         Self { value : 30, max: 30 }
     }
+}
+
+#[derive(Component, Serialize, Deserialize)]
+pub struct Damage {
+    pub value: u64
 }
 
 #[derive(Event, Debug)]

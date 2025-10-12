@@ -6,3 +6,4 @@ pub mod overworld;
 pub mod island;
 pub mod player;
 pub mod ui;
+pub mod ship;

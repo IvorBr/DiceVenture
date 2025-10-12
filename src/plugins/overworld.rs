@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::render::view::RenderLayers;
 use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
+use crate::components::ship::Ship;
 use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
@@ -11,20 +12,20 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 #[derive(ShaderType, Clone, Copy, Default)]
-pub struct ReflectionUniform {
-    pub clip_from_world: Mat4,
+pub struct WaterUniform {
+    pub camera_state: i32,
 }
 
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct WaterMaterial {
     #[uniform(0)]
-    pub reflection: ReflectionUniform,
+    pub reflection: WaterUniform,
 }
 
 impl Default for WaterMaterial {
     fn default() -> Self {
         Self {
-            reflection: ReflectionUniform::default(),
+            reflection: WaterUniform::default(),
         }
     }
 }
@@ -139,7 +140,6 @@ fn poisson_disk_sample_2d(
 fn spawn_overworld(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     overworld_query: Query<&OverworldRoot>,
     world_seed: Res<WorldSeed>,
@@ -192,18 +192,16 @@ fn spawn_overworld(
     );
 
     for (i, pos) in positions.into_iter().enumerate() {
-        let (island_type, base_color) = if rng.random_bool(0.5) {
-            (Atoll,
-            Color::srgb(0.9, 0.8, 0.6))
+        let island_type = if rng.random_bool(0.5) {
+            Atoll
         } else {
-            (Atoll,
-            Color::srgb(0.0, 0.4, 0.0))
+            Atoll
         };
         
         // Spawn the island entity
         commands
         .spawn((
-            Transform::from_xyz(pos.x, 0.0, pos.y),
+            Transform::from_xyz(pos.x.round(), 0.0, pos.y.round()),
             Visibility::Inherited, 
             Island((i + 1) as u64),
             island_type

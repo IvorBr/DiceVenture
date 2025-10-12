@@ -5,8 +5,9 @@ use bevy_replicon_renet2::RenetChannelsExt;
 use serde::Deserialize;
 use serde::Serialize;
 use crate::components::island_maps::IslandMaps;
-use crate::components::overworld::{Ship, WorldSeed};
+use crate::components::overworld::WorldSeed;
 use crate::components::character::LocalPlayer;
+use crate::components::ship::Ship;
 use crate::preludes::network_preludes::*;
 use crate::GameState;
 
