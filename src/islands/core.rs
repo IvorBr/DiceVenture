@@ -101,4 +101,3 @@ fn generate_trees(
         }
     }
 }
-

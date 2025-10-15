@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_replicon::prelude::{Channel, ClientTriggerAppExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
 
-use crate::{components::{character::LocalPlayer, enemy::Enemy, overworld::{ClientShipPosition, Island, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}}, plugins::camera::NewCameraTarget, OverworldSet};
+use crate::{components::{character::LocalPlayer, enemy::Enemy, island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland}, overworld::{ClientShipPosition, Entered, Island, LocalIsland, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}}, plugins::camera::NewCameraTarget, GameState, OverworldSet};
 
 pub struct OverworldShipPlugin;
 impl Plugin for OverworldShipPlugin {
@@ -14,25 +14,37 @@ impl Plugin for OverworldShipPlugin {
         .add_systems(
             Update,
             (
+                entered_ship,
                 spawn_ships,
-                (
-                spawn_overworld_ship,
-                move_enemy_patrol_ship,
-                ).in_set(OverworldSet),
+                (spawn_overworld_ship, move_enemy_patrol_ship).in_set(OverworldSet),
             )
         );
     }
 }
 
+fn entered_ship(
+    mut commands: Commands,
+    entered_query: Query<(Entity, &Ship), Added<Entered>>,
+    mut state: ResMut<NextState<GameState>>,
+    mut player_enter_event: EventWriter<EnteredIsland>
+) {
+    for (island_entity, island_id) in entered_query.iter() {
+        commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
+        player_enter_event.write(EnteredIsland(55));
+        state.set(GameState::Island);
+    }
+}
+
 fn spawn_ships(
     mut commands: Commands,
-    island_query: Query<Entity, Added<Island>>
+    island_query: Query<Entity, Added<Island>>,
 ){
     for island in island_query.iter() {
         commands.spawn((
             Ship,
             Enemy,
-            PatrolIsland(island)
+            PatrolIsland(island),
+            EnterPosition(Vec3::ZERO)
         ));
     }
 }

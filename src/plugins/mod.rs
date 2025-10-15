@@ -15,3 +15,4 @@ pub mod damage_numbers;
 pub mod ui;
 pub mod animations;
 pub mod projectiles;
+pub mod enterables;

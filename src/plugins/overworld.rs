@@ -38,7 +38,6 @@ impl Material for WaterMaterial {
 
 pub const WATER_HEIGHT : f32 = 0.3;
 pub struct OverworldPlugin;
-
 impl Plugin for OverworldPlugin {
     fn build(&self, app: &mut App) {
         app
@@ -49,7 +48,6 @@ impl Plugin for OverworldPlugin {
             Update,
             (
                 move_ocean,
-                island_proximity.run_if(in_state(GameState::Overworld)),
             )
         );
     }
@@ -167,8 +165,7 @@ fn spawn_overworld(
             Transform::from_xyz(0.0, WATER_HEIGHT, 0.0),
             Ocean,
             RenderLayers::layer(LAYER_WATER.into()),
-        ))
-        .observe(on_clicked_ocean);
+        ));
 
     // starter island
     commands
@@ -179,7 +176,6 @@ fn spawn_overworld(
         Visibility::Inherited,
         Atoll
     ))
-    .observe(on_clicked_island)
     .insert(ChildOf(overworld_root));
 
     let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
@@ -206,7 +202,6 @@ fn spawn_overworld(
             Island((i + 1) as u64),
             island_type
         ))
-        .observe(on_clicked_island)
         .insert(ChildOf(overworld_root));
     }
 }
@@ -219,102 +214,6 @@ fn move_ocean(
         for mut ocean_transform in &mut ocean {
             ocean_transform.translation.x = transform.translation().x;
             ocean_transform.translation.z = transform.translation().z;
-        }
-    }
-}
-
-fn island_proximity_check(
-    position: Transform,
-    islands: Vec<(Vec3, u64, Entity)> 
-) -> Option<(u64, f32, Entity)> {
-    if islands.is_empty() {
-        return None;
-    }
-
-    let (island_enter_position, mut best_island, mut best_island_enitity) = islands[0];
-    let mut best_distance = position.translation.distance_squared(island_enter_position);
-
-    for (enter_position, island_id, entity) in islands.iter().skip(1) {
-        let distance = position.translation.distance_squared(*enter_position);
-        if distance < best_distance {
-            best_distance = distance;
-            best_island = *island_id;
-            best_island_enitity = *entity;
-        }
-    }
-
-    Some((best_island, best_distance, best_island_enitity))
-}
-
-fn island_proximity(
-    mut commands: Commands,
-    mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
-    ship_query: Query<&Transform, (With<Ship>, With<LocalPlayer>)>,
-    island_query: Query<(&EnterPosition, &Island, Entity)>, //TODO: CURRENTLY DOES ALL ISLANDS!! SHOULD JUST BE THE CURRENT CHUNK
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut state: ResMut<NextState<GameState>>,
-    mut player_enter_event: EventWriter<EnteredIsland>
-) {
-    if let Ok(ship_transform) = ship_query.single() {
-        let island_transforms: Vec<(Vec3, u64, Entity)> = island_query.iter().map(|(t, i, e)| (t.0, i.0, e)).collect();
-        
-        if let Some((island_id, closest_distance, island_entity)) = island_proximity_check(*ship_transform, island_transforms) {
-            if let Ok(mut proximity_ui_visibility) = proximity_ui_query.single_mut() {
-                if closest_distance < 4.0 {
-                    *proximity_ui_visibility = Visibility::Inherited;
-
-                    if keyboard_input.pressed(KeyCode::KeyF) {
-                        commands.entity(island_entity).insert(LocalIsland).insert(GenerateIsland).insert(VisualizeIsland);
-                        println!("Adding generate for island: {}, {}, {}", island_id, island_entity, closest_distance);
-                        player_enter_event.write(EnteredIsland(island_id));
-                        state.set(GameState::Island);
-                    }
-                } else {
-                    *proximity_ui_visibility = Visibility::Hidden;
-                }
-            }
-
-            
-        }
-    }
-}
-
-fn on_clicked_island(
-    click: Trigger<Pointer<Click>>,
-    mut commands: Commands, 
-    current_target: Query<Entity, With<CameraTarget>>,
-    game_state: Res<State<GameState>>
-) {
-    println!("state: {:?}", *game_state.get());
-    if *game_state.get() == GameState::Overworld {
-        if let Ok(target) = current_target.single() {
-            commands.entity(target).remove::<CameraTarget>();
-        }
-    
-        commands.entity(click.target()).insert(CameraTarget);
-    
-        println!("Entity {:?} is now the camera target! island", click.target());
-    }
-}
-
-fn on_clicked_ocean(
-    click: Trigger<Pointer<Click>>,
-    mut commands: Commands,
-    current_target: Query<Entity, (With<CameraTarget>,Without<Ship>)>,
-    ship: Query<Entity, (With<Ship>, Without<CameraTarget>)>,
-    game_state: Res<State<GameState>>
-) {
-    println!("state: {:?}", *game_state.get());
-
-    if *game_state.get() == GameState::Overworld {
-        println!("Entity {:?} is now the camera target! ocean", click.target());
-
-        if let Ok(target) = current_target.single() {
-            commands.entity(target).remove::<CameraTarget>();
-        }
-
-        if let Ok(local_ship) = ship.single() {
-            commands.entity(local_ship).insert(CameraTarget);
         }
     }
 }

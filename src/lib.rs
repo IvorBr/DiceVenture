@@ -24,6 +24,7 @@ use crate::components::overworld::WorldSeed;
 use crate::plugins::animations::AnimationsPlugin;
 use crate::plugins::attack::AttackPlugin;
 use crate::plugins::damage_numbers::DamageNumbersPlugin;
+use crate::plugins::enterables::EnterablesPlugin;
 use crate::plugins::overworld_ships::OverworldShipPlugin;
 use crate::plugins::player::PlayerPlugin;
 use crate::plugins::ui::UIPlugin;
@@ -73,6 +74,7 @@ impl Plugin for AppPlugin {
             OverworldPlugin,
             PlayerShipPlugin,
             OverworldShipPlugin,
+            EnterablesPlugin,
 
             IslandPlugin,
             CharacterPlugin,

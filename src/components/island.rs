@@ -1,5 +1,7 @@
 use bevy::prelude::*;
+use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
+use crate::components::island_maps::Map;
 
 #[derive(Component)]
 pub struct EleminationObjective;
@@ -48,3 +50,7 @@ pub struct Chest;
 
 #[derive(Component)]
 pub struct EnterPosition(pub Vec3);
+
+pub trait IslandGen {
+    fn generate_tiles(map: &mut Map, seed: u64, rng: &mut StdRng);
+}

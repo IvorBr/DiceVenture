@@ -1,10 +1,12 @@
 use bevy::prelude::*;
+use bevy_replicon::prelude::Replicated;
 use serde::{Deserialize, Serialize};
 
 #[derive(Component)]
 pub struct Ocean;
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Deserialize, Serialize)]
+#[require(Enterable)]
 pub struct Island(pub u64);
 
 #[derive(Component)]
@@ -26,6 +28,12 @@ pub struct OverworldIslandVisual;
 #[derive(Component)]
 pub struct OverworldRoot;
 
+#[derive(Component, Default)]
+pub struct Enterable;
+
+#[derive(Component)]
+pub struct Entered;
+
 #[derive(Debug, Deserialize, Event, Serialize)]
 pub struct ClientShipPosition(pub Vec3);
 
@@ -36,4 +44,3 @@ pub struct ServerShipPosition{
 
 #[derive(Resource, Clone, Copy)]
 pub struct WorldSeed(pub u64);
-

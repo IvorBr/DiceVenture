@@ -6,8 +6,11 @@ use crate::components::humanoid::*;
 use crate::components::island::*;
 use crate::components::island_maps::IslandMaps;
 use crate::components::island_maps::TerrainType;
+use crate::components::overworld::Enterable;
+use crate::components::overworld::Entered;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
+use crate::islands::ship_map::ShipMapPlugin;
 use crate::plugins::network::MakeLocal;
 use crate::components::character::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
@@ -21,7 +24,7 @@ pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_plugins(AtollPlugin)
+        .add_plugins((AtollPlugin, ShipMapPlugin))
         .add_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)
         .replicate::<OnIsland>()
@@ -30,8 +33,22 @@ impl Plugin for IslandPlugin {
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
         .add_systems(Update, (
             (player_enters_island, player_leaves_island, elimination_island_objective).run_if(server_running),
-            (spawn_player_island, client_player_leaves_island).in_set(IslandSet)
+            (spawn_player_island, client_player_leaves_island).in_set(IslandSet),
+            entered_island
         ));
+    }
+}
+
+fn entered_island(
+    mut commands: Commands,
+    entered_query: Query<(Entity, &Island), (Added<Entered>, With<Island>)>,
+    mut state: ResMut<NextState<GameState>>,
+    mut player_enter_event: EventWriter<EnteredIsland>
+) {
+    for (island_entity, island_id) in entered_query.iter() {
+        commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
+        player_enter_event.write(EnteredIsland(island_id.0));
+        state.set(GameState::Island);
     }
 }
 
