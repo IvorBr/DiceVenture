@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
-use crate::components::island_maps::Map;
+use crate::components::island_maps::Grid;
 
 #[derive(Component)]
 pub struct EleminationObjective;
@@ -22,7 +22,7 @@ pub struct LeavePosition;
 pub struct CleanIsland;
 
 #[derive(Component, Serialize, Deserialize)]
-pub struct OnIsland(pub u64);
+pub struct OnIsland(pub Entity);
 
 #[derive(Component)]
 pub struct GenerateIsland;
@@ -52,5 +52,5 @@ pub struct Chest;
 pub struct EnterPosition(pub Vec3);
 
 pub trait IslandGen {
-    fn generate_tiles(map: &mut Map, seed: u64, rng: &mut StdRng);
+    fn generate_tiles(map: &mut Grid, seed: u64, rng: &mut StdRng);
 }

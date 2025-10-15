@@ -4,7 +4,6 @@ use bevy_replicon_renet2::netcode::ServerSetupConfig;
 use bevy_replicon_renet2::RenetChannelsExt;
 use serde::Deserialize;
 use serde::Serialize;
-use crate::components::island_maps::IslandMaps;
 use crate::components::overworld::WorldSeed;
 use crate::components::character::LocalPlayer;
 use crate::components::ship::Ship;
@@ -30,7 +29,6 @@ impl Plugin for NetworkPlugin {
         })
         .add_plugins((RepliconPlugins, RepliconRenetPlugins))
         .init_resource::<Cli>()
-        .insert_resource(IslandMaps::new())
         .add_client_trigger::<ClientInfo>(Channel::Ordered)
         .add_server_trigger::<MakeLocal>(Channel::Ordered)
         .add_server_trigger::<GameInfo>(Channel::Unordered)

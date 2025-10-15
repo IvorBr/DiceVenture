@@ -1,11 +1,11 @@
 use bevy::prelude::*;
-use crate::components::island_maps::{Map, TileType};
+use crate::components::island_maps::{Grid, TileType};
 
 pub fn check_attack_path(
     start: IVec3,
     direction: IVec3,
     range: u8,
-    map: &Map
+    map: &Grid
 ) -> Vec3 {
     let mut vector = Vec3::ZERO;
     let mut total_down = 0;

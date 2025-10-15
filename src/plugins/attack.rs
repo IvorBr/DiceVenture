@@ -7,13 +7,11 @@ use crate::attacks::cut_through::CutThroughPlugin;
 use crate::attacks::dagger_throw::DaggerThrowPlugin;
 use crate::components::enemy::Enemy;
 use crate::components::humanoid::{ActiveSkills, AttackCooldowns, DamageVisualizer, Health, Stunned, ViewDirection, VisualEntity, VisualRef};
-use crate::components::island::OnIsland;
-use crate::components::island_maps::IslandMaps;
+use crate::components::island_maps::Grid;
 use crate::components::player::RewardEvent;
 use crate::plugins::damage_numbers::SpawnNumberEvent;
 use crate::plugins::projectiles::ProjectilePlugin;
 use crate::preludes::network_preludes::*;
-use crate::CHUNK_SIZE;
 use std::collections::HashMap;
 
 use std::hash::{BuildHasher, BuildHasherDefault, Hasher};
@@ -104,7 +102,7 @@ pub struct NegateDamageTrigger {
     pub owner: Entity,
     #[entities]
     pub victim: Entity,
-    pub island: u64,
+    pub island: Entity,
     pub offset: IVec3,
     pub damage: u64,
 }
@@ -180,13 +178,13 @@ fn tick_attack_cooldowns(
 #[derive(Event)]
 pub struct DamageEvent {
     pub owner: Entity,
-    pub island: u64,
+    pub island: Entity,
     pub offset: IVec3,
     pub damage: u64
 }
 
 impl DamageEvent {
-    pub fn new(owner: Entity, island: u64, offset: IVec3, damage: u64) -> Self {
+    pub fn new(owner: Entity, island: Entity, offset: IVec3, damage: u64) -> Self {
         Self { owner, island, offset, damage }
     }
 }
@@ -195,7 +193,7 @@ impl DamageEvent {
 pub struct NegatedDamageEvent {
     pub owner: Entity,
     pub victim: Entity,
-    pub island: u64,
+    pub island: Entity,
     pub offset: IVec3,
     pub damage: u64,
 }
@@ -234,14 +232,14 @@ fn client_damage_trigger(
 
 fn damage_trigger(
     damage_trigger: Trigger<DamageEvent>,
-    island_maps: Res<IslandMaps>,
     mut health: Query<(&mut Health, Option<&Children>)>,
     negate_query: Query<&NegatingDamage>,
     server: Option<Res<RenetServer>>,
-    mut commands: Commands
+    mut commands: Commands,
+    grid_query: Query<&Grid>
 ) {
     if server.is_some() {
-        if let Some(map) = island_maps.maps.get(&damage_trigger.island) {
+        if let Ok(map) = grid_query.get(damage_trigger.island) {
             if let Some(victim) = map.get_target(damage_trigger.offset) {
                 if let Ok((mut hp, children)) = health.get_mut(victim) {
                     println!("Victim found");

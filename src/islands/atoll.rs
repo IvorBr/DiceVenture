@@ -10,6 +10,7 @@ use crate::components::island::IslandGen;
 use crate::components::island::OnIsland;
 use crate::attacks::base_attack::BaseAttack;
 use crate::components::island::{CompletedIslandObjective, FinishedSetupIsland, MapFinishedIsland};
+use crate::components::island_maps::Grid;
 use crate::components::overworld::Enterable;
 use crate::components::overworld::Island;
 use crate::plugins::attack::key_of;
@@ -21,7 +22,7 @@ use rand::SeedableRng;
 
 use rand::Rng;
 use noise::{Fbm, NoiseFn};
-use crate::components::island_maps::{Map, IslandMaps, TerrainType};
+use crate::components::island_maps::{TerrainType};
 use crate::islands::core::{add_boardwalk, reserve_with_margin};
 
 #[derive(Component)]
@@ -48,16 +49,14 @@ impl Plugin for AtollPlugin {
 
 fn setup_island_server(
     mut commands: Commands,
-    mut island_maps: ResMut<IslandMaps>,
-    islands: Query<(Entity, &Island, Option<&CompletedIslandObjective>), (With<Atoll>, With<MapFinishedIsland>)>,
+    islands: Query<(Entity, &Grid, Option<&CompletedIslandObjective>), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
-    for (entity, island_id, island_obj) in islands.iter() {
+    for (entity, grid, island_obj) in islands.iter() {
 
         if island_obj.is_none() {
-            let map = island_maps.maps.get_mut(&island_id.0).unwrap();
             let mut generator = StdRng::seed_from_u64(island_id.0);
             
-            let top_tiles = map.above_water_top_tiles();
+            let top_tiles = grid.above_water_top_tiles();
             for _ in 0..4 {
                 let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
                 let enemy_id = commands
@@ -69,13 +68,13 @@ fn setup_island_server(
                         EnemyState::Idle,
                         Position::new(enemy_pos),
                         MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
-                        OnIsland(island_id.0),
+                        OnIsland(entity),
                         RangeAggro(8),
                         Damage { value: 10 }
                     ))
                     .id();
 
-                map.add_enemy(enemy_pos, enemy_id);
+                grid.add_enemy(enemy_pos, enemy_id);
                 commands.entity(entity).insert(EliminationObjective);
             }
         }

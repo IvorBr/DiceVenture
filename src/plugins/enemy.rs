@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::components::humanoid::{ActionState, AttackCooldowns, ViewDirection, VisualEntity, VisualRef};
 use crate::components::island::OnIsland;
-use crate::components::island_maps::IslandMaps;
-use crate::components::overworld::{LocalIsland, Island};
+use crate::components::island_maps::Grid;
+use crate::components::overworld::LocalIsland;
 use crate::plugins::attack::{AttackCatalogue, AttackInfo};
 use crate::plugins::enemy_behaviour::AggressionPlugin;
 use crate::plugins::enemy_movement::MovementPlugin;
@@ -34,14 +34,10 @@ fn init_enemy(
     enemies: Query<(Entity, &Position, &OnIsland), (With<Enemy>, Without<Transform>)>,
     enemy_shapes: Query<&Shape>,
     snake_parts: Query<&SnakePart, Without<Transform>>,
-    local_island_query: Query<(Entity, &Island), With<LocalIsland>>,
+    local_island_query: Query<Entity, With<LocalIsland>>,
 ) {
     for (entity, position, island) in &enemies {
-        if let Ok((island_entity, local_island)) = local_island_query.single() {
-            if island.0 != local_island.0 {
-                continue;
-            }
-            
+        if let Ok(island_entity) = local_island_query.get(island.0) {
             println!("{:?} enemy spawned", entity);
 
             let visual = commands.spawn((
@@ -166,11 +162,11 @@ fn enemy_death_check(
     mut commands: Commands,
     entities: Query<(&OnIsland, &Health, Entity), With<Enemy>>,
     snake_parts: Query<&SnakePart>,
-    mut island_maps: ResMut<IslandMaps>
+    mut grid_query: Query<&mut Grid>
 ) {
     for (island, health, entity) in &entities {
         if health.get() == 0 {
-            island_maps.get_map_mut(island.0).map(|map| map.enemy_count -= 1);
+            grid_query.get_mut(island.0).map(|mut grid| grid.enemy_count -= 1);
             
             commands.entity(entity).insert(RemoveEntity);
             

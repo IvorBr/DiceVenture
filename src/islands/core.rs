@@ -2,7 +2,7 @@ use bevy::{prelude::*};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use std::collections::HashSet;
 use rand::Rng;
-use crate::components::island_maps::{Map, TerrainType, Tile, TileType};
+use crate::components::island_maps::{Grid, TerrainType, Tile, TileType};
 use rand::seq::IndexedRandom;
 pub fn reserve_with_margin(set: &mut HashSet<IVec3>, positions: &[IVec3], margin: i32) {
     for &pos in positions {
@@ -17,7 +17,7 @@ pub fn reserve_with_margin(set: &mut HashSet<IVec3>, positions: &[IVec3], margin
 }
 
 pub fn add_boardwalk(
-    map: &mut Map,
+    map: &mut Grid,
     reserved_positions: &mut HashSet<IVec3>,
     generator: &mut StdRng,
 ) {
@@ -49,7 +49,7 @@ pub fn add_boardwalk(
 }
 
 fn generate_trees(
-    map: &mut Map,
+    map: &mut Grid,
     reserved_positions: &mut HashSet<IVec3>,
     generator: &mut StdRng,
     top_tiles: Vec<IVec3>

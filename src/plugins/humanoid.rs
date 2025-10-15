@@ -9,10 +9,10 @@ use crate::components::humanoid::Stunned;
 use crate::components::humanoid::ViewDirection;
 use crate::components::island::LeaveIsland;
 use crate::components::island::OnIsland;
+use crate::components::island_maps::Grid;
 use crate::plugins::network::OwnedBy;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
-use crate::components::island_maps::IslandMaps;
 use crate::IslandSet;
 
 pub struct HumanoidPlugin;
@@ -51,10 +51,10 @@ fn player_death_check(
 fn remove_entities(
     mut commands: Commands,
     entities: Query<(Entity, &Position, &OnIsland), With<RemoveEntity>>,
-    mut islands: ResMut<IslandMaps>
+    mut grid_query: Query<&mut Grid>
 ) {
     for (entity, position, island) in entities.iter() {
-        islands.get_map_mut(island.0).map(|map| {map.remove_entity(position.0); map.entities.remove(&entity)});
+        grid_query.get_mut(island.0).map(|mut grid| {grid.remove_entity(position.0); grid.entities.remove(&entity)});
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn();
     }
@@ -64,11 +64,11 @@ fn position_change_event(
     mut commands: Commands,
     mut event: EventReader<PositionUpdate>,
     mut entity_query: Query<(&mut Position, &OnIsland, Option<&Character>)>,
-    mut island_maps: ResMut<IslandMaps>
+    mut grid_query: Query<&mut Grid>
 ) {
     for PositionUpdate { new_position, entity } in event.read() {
         if let Ok((mut entity_position, island, character)) = entity_query.get_mut(*entity) {
-            if let Some(map) = island_maps.get_map_mut(island.0) {
+            if let Ok(mut map) = grid_query.get_mut(island.0) {
                 
                 let mut tile_type = TileType::Enemy;
                 if character.is_some() {
@@ -94,10 +94,10 @@ fn position_change_event(
 fn position_trigger(
     trigger: Trigger<ServerPositionUpdate>,
     mut entity_query: Query<(&mut Position, &mut ViewDirection, &OnIsland, Option<&Character>)>,
-    mut island_maps: ResMut<IslandMaps>
+    mut grid_query: Query<&mut Grid>
 ) {
     if let Ok((mut position, mut view_direction, island, character)) = entity_query.get_mut(trigger.target()) {
-        if let Some(map) = island_maps.get_map_mut(island.0) {
+        if let Ok(mut map) = grid_query.get_mut(island.0) {
             
             let mut tile_type = TileType::Enemy;
             if character.is_some() {

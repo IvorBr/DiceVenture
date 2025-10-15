@@ -7,7 +7,7 @@ use crate::components::enemy::EnemyState;
 use crate::components::humanoid::ActionState;
 use crate::components::humanoid::PositionUpdate;
 use crate::components::island::OnIsland;
-use crate::components::island_maps::IslandMaps;
+use crate::components::island_maps::Grid;
 use crate::preludes::network_preludes::*;
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::{PathfindNode, MoveTimer};
@@ -29,7 +29,7 @@ fn standard_mover(
     mut event: EventWriter<PositionUpdate>,
     mut enemies: Query<(Entity, &mut MoveTimer, &Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Character>)>,
     players: Query<&Position, With<Character>>,
-    mut islands: ResMut<IslandMaps>,
+    mut grid_query: Query<&mut Grid>
 ) {
     for (enemy_entity, mut timer, enemy_pos, island, enemy_state, move_rule, action_state) in enemies.iter_mut() {
         if timer.0.tick(time.delta()).just_finished() {
@@ -40,7 +40,7 @@ fn standard_mover(
             continue;
         }
 
-        if let Some(map) = islands.maps.get_mut(&island.0) {
+        if let Ok(map) = grid_query.get_mut(island.0) {
             let enemy_target = match enemy_state {
                 EnemyState::Attacking(target) => Some(players.get(*target)),
                 _ => None,
@@ -62,7 +62,7 @@ fn standard_mover(
 }
 
 
-fn astar(start: IVec3, goal: IVec3, map: &Map, move_rule: &MoveRule) -> Vec<IVec3> {
+fn astar(start: IVec3, goal: IVec3, map: &Grid, move_rule: &MoveRule) -> Vec<IVec3> {
     let mut open_set = BinaryHeap::new();
     let mut open_set_hash = HashSet::new(); // Store the positions in the open set for faster checks
     let mut closed_set = HashSet::new();
@@ -123,7 +123,7 @@ fn reconstruct_path(came_from: HashMap<IVec3, IVec3>, mut current: IVec3) -> Vec
     total_path
 }
 
-fn get_valid_neighbors(position: IVec3, map: &Map, directions: &'static [IVec3]) -> Vec<IVec3> {
+fn get_valid_neighbors(position: IVec3, map: &Grid, directions: &'static [IVec3]) -> Vec<IVec3> {
     let mut neighbors = Vec::new();
 
     for &dir in directions.iter() {

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use crate::attacks::core::calculate_damage;
 use crate::components::humanoid::{ActionState, Damage, PositionUpdate};
 use crate::components::island::OnIsland;
-use crate::components::island_maps::{IslandMaps};
+use crate::components::island_maps::Grid;
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, DamageEvent, Interruptable};
 use crate::preludes::humanoid_preludes::*;
 use crate::components::enemy::STANDARD;
@@ -59,7 +59,7 @@ fn perform_attack(
     mut event: EventWriter<PositionUpdate>,
     mut attacks: Query<(Entity, &ChildOf, &mut CutThrough)>,
     mut parent_query: Query<(&mut Position, &mut ActionState, &OnIsland, &Damage)>,
-    mut island_maps: ResMut<IslandMaps>
+    mut grid_query: Query<&mut Grid>
 ) {
     for (child_entity, parent, mut attack) in &mut attacks {
         attack.timer.tick(time.delta());
@@ -69,7 +69,7 @@ fn perform_attack(
 
             if attack.timer.finished() {
                 let mut check_pos = pos.0 + attack.direction;
-                if let Some(map) = island_maps.get_map_mut(island.0) {
+                if let Ok(map) = grid_query.get_mut(island.0) {
                     while map.get_target(check_pos).is_some() {
                         commands.trigger(DamageEvent::new(
                             parent.0,

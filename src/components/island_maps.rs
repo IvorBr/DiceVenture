@@ -5,25 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::CHUNK_SIZE;
 
-#[derive(Resource, Default)]
-pub struct IslandMaps {
-    pub maps: HashMap<u64, Map>,
-}
-
-impl IslandMaps {
-    pub fn new() -> Self {
-        IslandMaps { maps: HashMap::new() }
-    }
-
-    pub fn get_map_mut(&mut self, id: u64) -> Option<&mut Map> {
-        self.maps.get_mut(&id)
-    }
-
-    pub fn get_map(&self, id: u64) -> Option<&Map> {
-        self.maps.get(&id)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
 pub enum TerrainType {
     Invisible,
@@ -102,7 +83,8 @@ impl Chunk {
     }
 }
 
-pub struct Map {
+#[derive(Component)]
+pub struct Grid {
     pub chunks: HashMap<IVec3, Chunk>,
     pub player_count : u32,
     pub enemy_count : u32,
@@ -110,7 +92,7 @@ pub struct Map {
     pub entities: HashSet<Entity>
 }
 
-impl Map {
+impl Grid {
     pub fn new() -> Self {
         let chunks = HashMap::new();
         let player_count = 0;
@@ -118,7 +100,7 @@ impl Map {
         let leave_position = IVec3::ZERO;
         let entities = HashSet::new();
 
-        Map { chunks, player_count, enemy_count, leave_position, entities }
+        Grid { chunks, player_count, enemy_count, leave_position, entities }
     }
 
     pub fn world_to_chunk_coords(&self, world_pos: IVec3) -> IVec3 {

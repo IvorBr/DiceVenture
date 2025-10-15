@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::components::humanoid::ActionState;
 use crate::components::island::OnIsland;
-use crate::components::island_maps::IslandMaps;
+use crate::components::island_maps::Grid;
 use crate::plugins::attack::{key_of, AttackCatalogue, AttackRegistry, AttackSpec, Interruptable};
 use crate::plugins::projectiles::Projectile;
 use crate::preludes::humanoid_preludes::*;
@@ -59,25 +59,26 @@ fn register_attack(
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
-    island_maps: Res<IslandMaps>,
     mut meshes: ResMut<Assets<Mesh>>, 
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut attacks: Query<(Entity, &ChildOf, &mut DaggerThrow)>,
     mut parent_query: Query<(&Position, &mut ActionState, &OnIsland, &Damage)>,
+    grid_query: Query<&Grid>
 ) {
         for (child_entity, parent, mut attack) in &mut attacks {
         if let Ok((pos, mut state, island, damage)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
             attack.timer.tick(time.delta());
 
-            if island_maps.get_map(island.0).is_some() && !attack.hit { //TODO: using attack.hit to ensure only one projectile is spawned, not ideal but works for now
+            if let Ok(map) = grid_query.get(island.0) {
+                if attack.hit {continue;} //TODO: using attack.hit to ensure only one projectile is spawned, not ideal but works for now
                 attack.hit = true;
             
                 let attack_direction = check_attack_path(
                     pos.0,
                     attack.direction,
                     ATTACK_RANGE,
-                    island_maps.get_map(island.0).unwrap()
+                    map
                 );
 
                 commands.spawn((

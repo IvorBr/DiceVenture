@@ -8,9 +8,9 @@ use crate::components::humanoid::ActionState;
 use crate::components::humanoid::PositionUpdate;
 use crate::components::humanoid::ViewDirection;
 use crate::components::island::OnIsland;
-use crate::components::island_maps::IslandMaps;
 use crate::components::character::LocalPlayer;
 use crate::components::character::MovementCooldown;
+use crate::components::island_maps::Grid;
 use crate::plugins::attack::key_of;
 use crate::plugins::attack::AttackEvent;
 use crate::preludes::humanoid_preludes::*;
@@ -163,11 +163,11 @@ pub fn apply_movement(
     mut move_events: EventReader<FromClient<MoveDirection>>,
     mut position_event: EventWriter<PositionUpdate>,
     players: Query<(&OwnedBy, &Position, Entity, &OnIsland), With<Character>>,
-    mut islands: ResMut<IslandMaps>,
+    mut grid_query: Query<&mut Grid>
 ) {
     for FromClient { client_entity, event } in move_events.read() {
         for (owner, position, player_entity, island) in players.iter() {
-            if let Some(map) = islands.get_map_mut(island.0) {
+            if let Ok(mut map) = grid_query.get_mut(island.0) {
                 if *client_entity == owner.0 {
                     let mut new_position = event.0;
                     let current_pos = position.0.clone();

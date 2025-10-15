@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::components::island_maps::{IslandMaps, TileType};
+use crate::components::island_maps::{Grid, TileType};
 use crate::components::island::OnIsland;
 use crate::plugins::attack::DamageEvent;
 
@@ -32,7 +32,7 @@ fn projectile_system(
     time: Res<Time>,
     mut commands: Commands,
     mut projectiles: Query<(Entity, &mut Transform, &mut Projectile, &OnIsland)>,
-    island_maps: Res<IslandMaps>,
+    grid_query: Query<&Grid>,
 ) {
     for (entity, mut transform, mut projectile, island) in &mut projectiles {
         let delta = projectile.speed * time.delta_secs();
@@ -41,7 +41,7 @@ fn projectile_system(
 
         transform.translation += projectile.velocity * delta;
 
-        if let Some(map) = island_maps.get_map(island.0) { //TODO: Currently we have tunneling, look into DDA
+        if let Ok(map) = grid_query.get(island.0) { //TODO: Currently we have tunneling, look into DDA
             let tile_pos = IVec3::new(transform.translation.x.round() as i32, transform.translation.y.round() as i32, transform.translation.z.round() as i32);
             let tile = map.get_tile(tile_pos);
 
