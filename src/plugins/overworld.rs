@@ -48,8 +48,27 @@ impl Plugin for OverworldPlugin {
             Update,
             (
                 move_ocean,
+                spawn_island
             )
         );
+    }
+}
+
+fn spawn_island(
+    mut commands: Commands,
+    new_islands: Query<(Entity, &Island), Added<Island>>,
+    overworld_query: Query<Entity, With<OverworldRoot>>,
+){
+    if let Ok(overworld_root) = overworld_query.single() {
+        for (island_entity, island) in new_islands.iter() {
+            commands.entity(island_entity)
+            .insert((
+                Transform::from_translation(island.position),
+                Visibility::Inherited,
+                Atoll
+            ))
+            .insert(ChildOf(overworld_root));
+        }
     }
 }
 

@@ -29,7 +29,7 @@ use crate::islands::core::{add_boardwalk, reserve_with_margin};
 pub struct Atoll;
 
 impl IslandGen for Atoll {
-    fn generate_tiles(map: &mut Map, seed: u64, rng: &mut StdRng) {
+    fn generate_tiles(map: &mut Grid, seed: u64, rng: &mut StdRng) {
         generate_tiles(map, seed, rng);
     }
 }
@@ -49,12 +49,11 @@ impl Plugin for AtollPlugin {
 
 fn setup_island_server(
     mut commands: Commands,
-    islands: Query<(Entity, &Grid, Option<&CompletedIslandObjective>), (With<Atoll>, With<MapFinishedIsland>)>,
+    mut islands: Query<(Entity, &mut Grid, Option<&CompletedIslandObjective>, &Island), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
-    for (entity, grid, island_obj) in islands.iter() {
-
+    for (entity, mut grid, island_obj, island_id) in islands.iter_mut() {
         if island_obj.is_none() {
-            let mut generator = StdRng::seed_from_u64(island_id.0);
+            let mut generator = StdRng::seed_from_u64(island_id.seed);
             
             let top_tiles = grid.above_water_top_tiles();
             for _ in 0..4 {
@@ -83,7 +82,7 @@ fn setup_island_server(
     }
 }
 
-pub fn generate_tiles(map: &mut Map, seed: u64, generator: &mut StdRng) -> Vec<IVec3> {
+pub fn generate_tiles(map: &mut Grid, seed: u64, generator: &mut StdRng) -> Vec<IVec3> {
     let size = 50;
     let radius = size as f32 * 0.5;
     let center_offset = IVec3::new(8, 0, 8) - IVec3::new(size as i32 / 2, 0, size as i32 / 2);

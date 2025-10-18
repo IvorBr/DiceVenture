@@ -74,10 +74,10 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
 ) {
     let island_size = 1.0;
     for (entity, island_id, tf) in new_islands.iter() {
-        let mut generator = StdRng::seed_from_u64(island_id.0);
+        let mut generator = StdRng::seed_from_u64(island_id.seed);
 
         let mut map = Grid::new();
-        T::generate_tiles(&mut map, island_id.0, &mut generator);
+        T::generate_tiles(&mut map, island_id.seed, &mut generator);
 
         let parent = commands.spawn((OverworldIslandVisual, Transform::from_translation(Vec3::ZERO), Visibility::Visible)).id();
         commands.entity(entity).add_child(parent).insert(EnterPosition(map.leave_position.as_vec3()/island_size));
@@ -148,9 +148,9 @@ pub fn generate_island_map<T: Component + IslandGen>(
     mut new_islands: Query<(Entity, &Island, &mut Grid), (With<T>, With<GenerateIsland>)>
 ) {
     for (entity, island_id, mut grid) in new_islands.iter_mut() {
-        let mut generator = StdRng::seed_from_u64(island_id.0);
+        let mut generator = StdRng::seed_from_u64(island_id.seed);
 
-        T::generate_tiles(&mut grid, island_id.0, &mut generator);
+        T::generate_tiles(&mut grid, island_id.seed, &mut generator);
         commands.entity(entity).insert(MapFinishedIsland).remove::<GenerateIsland>();
     }
 }

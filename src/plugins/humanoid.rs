@@ -10,6 +10,7 @@ use crate::components::humanoid::ViewDirection;
 use crate::components::island::LeaveIsland;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::Grid;
+use crate::components::overworld::Island;
 use crate::plugins::network::OwnedBy;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
@@ -37,12 +38,15 @@ impl Plugin for HumanoidPlugin {
 fn player_death_check(
     mut commands: Commands,
     entities: Query<(&Health, Entity, &OwnedBy, &OnIsland), Without<Enemy>>,
+    island_query: Query<&Island>,
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
     for (health, entity, owner, island) in entities.iter() {
         if health.get() == 0 {
             commands.entity(entity).insert(RemoveEntity);
-            leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });
+            if let Ok(island_id) = island_query.get(island.0) {
+                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island_id.0) });
+            }
         }
     }
 }

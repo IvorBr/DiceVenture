@@ -26,7 +26,6 @@ impl Plugin for IslandPlugin {
         .add_plugins((AtollPlugin, ShipMapPlugin))
         .add_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)
-        .replicate::<OnIsland>()
         .replicate::<Character>()
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
@@ -70,11 +69,11 @@ fn client_island_cleanup(
 fn spawn_player_island(
     mut commands: Commands,
     players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
-    local_island_query: Query<(Entity, &Island), With<LocalIsland>>,
+    local_island_query: Query<Entity, With<LocalIsland>>,
     assets: Res<AssetServer>,
 ) {
     for (entity, position, local, island) in players.iter() {
-        if let Ok((island_entity, local_island)) = local_island_query.get(island.0) {
+        if let Ok(island_entity) = local_island_query.get(island.0) {
             commands.entity(entity).insert((
                 Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
             ));
@@ -101,8 +100,7 @@ fn spawn_player_island(
 
 fn visualize_island(
     mut commands: Commands,
-    mut islands: Query<(Entity, &mut Grid, &Transform), (Without<GenerateIsland>, With<VisualizeIsland>)>,
-    mut grid_query: Query<&mut Grid>,
+    islands: Query<(Entity, &Grid, &Transform), (Without<GenerateIsland>, With<VisualizeIsland>)>,
     assets: Res<AssetServer>,
 ){    
     if let Ok((entity, grid, island_position)) = islands.single() {
@@ -281,6 +279,7 @@ fn client_player_leaves_island(
 fn player_leaves_island(
     mut commands: Commands,
     player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Character>>,
+    island_query: Query<&Island>,
     mut grid_query: Query<&mut Grid>,
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
@@ -293,7 +292,10 @@ fn player_leaves_island(
                 map.remove_entity(position.0);
                 map.entities.remove(&entity);
                 map.player_count -= 1;
-                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island.0) });    
+
+                if let Ok(island_id) = island_query.get(island.0) {
+                    leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island_id.0) });    
+                }
             }
         }
     }

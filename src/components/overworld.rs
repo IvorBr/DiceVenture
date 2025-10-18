@@ -7,7 +7,10 @@ pub struct Ocean;
 
 #[derive(Component, Default, Deserialize, Serialize)]
 #[require(Enterable)]
-pub struct Island(pub u64);
+pub struct Island {
+    pub seed: u64,
+    pub position: Vec3
+}
 
 #[derive(Component)]
 #[require(Island)]

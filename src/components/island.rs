@@ -21,7 +21,7 @@ pub struct LeavePosition;
 #[derive(Event)]
 pub struct CleanIsland;
 
-#[derive(Component, Serialize, Deserialize)]
+#[derive(Component)]
 pub struct OnIsland(pub Entity);
 
 #[derive(Component)]
