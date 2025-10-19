@@ -83,7 +83,7 @@ impl Chunk {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Grid {
     pub chunks: HashMap<IVec3, Chunk>,
     pub player_count : u32,

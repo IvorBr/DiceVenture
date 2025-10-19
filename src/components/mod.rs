@@ -7,3 +7,4 @@ pub mod island;
 pub mod player;
 pub mod ui;
 pub mod ship;
+pub mod core;

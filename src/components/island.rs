@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::entity::MapEntities, prelude::*};
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use crate::components::island_maps::Grid;
@@ -9,11 +9,11 @@ pub struct EleminationObjective;
 #[derive(Component)]
 pub struct IslandRoot;
 
-#[derive(Debug, Deserialize, Event, Serialize)]
-pub struct EnteredIsland(pub u64);
+#[derive(Debug, Deserialize, Event, Serialize, MapEntities, Clone)]
+pub struct EnteredIsland(#[entities] pub Entity);
 
 #[derive(Debug, Deserialize, Event, Serialize)]
-pub struct LeaveIsland(pub u64);
+pub struct LeaveIsland;
 
 #[derive(Component)]
 pub struct LeavePosition;
@@ -21,8 +21,8 @@ pub struct LeavePosition;
 #[derive(Event)]
 pub struct CleanIsland;
 
-#[derive(Component)]
-pub struct OnIsland(pub Entity);
+#[derive(Component, Deserialize, Serialize)]
+pub struct OnIsland(#[entities] pub Entity);
 
 #[derive(Component)]
 pub struct GenerateIsland;
@@ -36,7 +36,7 @@ pub struct VisualizeIsland;
 #[derive(Component)]
 pub struct FinishedSetupIsland;
 
-#[derive(Component)]
+#[derive(Component, Deserialize, Serialize)]
 pub struct Waiting;
 
 #[derive(Component)]

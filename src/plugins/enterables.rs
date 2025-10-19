@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use rand::rngs::StdRng;
 use rand::{random_range, SeedableRng};
+use crate::components::core::Initialized;
 use crate::components::island::{EnterPosition, GenerateIsland, IslandGen, MapFinishedIsland};
 use crate::components::character::LocalPlayer;
 use crate::components::island_maps::{Grid, TerrainType, TileType};
@@ -70,10 +71,10 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    new_islands: Query<(Entity, &Island, &Transform), (Added<Enterable>, With<T>)>,
+    new_islands: Query<(Entity, &Island), (Added<Initialized>, With<T>)>,
 ) {
     let island_size = 1.0;
-    for (entity, island_id, tf) in new_islands.iter() {
+    for (entity, island_id) in new_islands.iter() {
         let mut generator = StdRng::seed_from_u64(island_id.seed);
 
         let mut map = Grid::new();

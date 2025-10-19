@@ -14,7 +14,7 @@ impl Plugin for OverworldShipPlugin {
         .add_systems(
             Update,
             (
-                entered_ship,
+                //entered_ship,
                 spawn_ships,
                 (spawn_overworld_ship, move_enemy_patrol_ship).in_set(OverworldSet),
             )
@@ -22,18 +22,18 @@ impl Plugin for OverworldShipPlugin {
     }
 }
 
-fn entered_ship(
-    mut commands: Commands,
-    entered_query: Query<(Entity, &Ship), Added<Entered>>,
-    mut state: ResMut<NextState<GameState>>,
-    mut player_enter_event: EventWriter<EnteredIsland>
-) {
-    for (island_entity, island_id) in entered_query.iter() {
-        commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
-        player_enter_event.write(EnteredIsland(55));
-        state.set(GameState::Island);
-    }
-}
+// fn entered_ship(
+//     mut commands: Commands,
+//     entered_query: Query<Entity, (Added<Entered>, With<Ship>)>,
+//     mut state: ResMut<NextState<GameState>>,
+//     mut player_enter_event: EventWriter<EnteredIsland>
+// ) {
+//     for island_entity in entered_query.iter() {
+//         commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
+//         player_enter_event.write(EnteredIsland(island_entity));
+//         state.set(GameState::Island);
+//     }
+// }
 
 fn spawn_ships(
     mut commands: Commands,

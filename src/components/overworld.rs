@@ -2,17 +2,19 @@ use bevy::prelude::*;
 use bevy_replicon::prelude::Replicated;
 use serde::{Deserialize, Serialize};
 
+use crate::components::island_maps::Grid;
+
 #[derive(Component)]
 pub struct Ocean;
 
 #[derive(Component, Default, Deserialize, Serialize)]
-#[require(Enterable)]
+#[require(Enterable, Replicated)]
 pub struct Island {
     pub seed: u64,
     pub position: Vec3
 }
 
-#[derive(Component)]
+#[derive(Component,Deserialize, Serialize)]
 #[require(Island)]
 pub struct StarterIsland;
 
@@ -32,6 +34,7 @@ pub struct OverworldIslandVisual;
 pub struct OverworldRoot;
 
 #[derive(Component, Default)]
+#[require(Grid)]
 pub struct Enterable;
 
 #[derive(Component)]

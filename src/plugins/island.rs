@@ -24,9 +24,10 @@ impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((AtollPlugin, ShipMapPlugin))
-        .add_client_event::<EnteredIsland>(Channel::Unordered)
+        .add_mapped_client_event::<EnteredIsland>(Channel::Unordered)
         .add_server_event::<LeaveIsland>(Channel::Unordered)
         .replicate::<Character>()
+        .replicate::<Waiting>()
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
         .add_systems(Update, (
@@ -39,13 +40,14 @@ impl Plugin for IslandPlugin {
 
 fn entered_island(
     mut commands: Commands,
-    entered_query: Query<(Entity, &Island), (Added<Entered>, With<Island>)>,
+    entered_query: Query<Entity, (Added<Entered>, With<Island>)>,
     mut state: ResMut<NextState<GameState>>,
     mut player_enter_event: EventWriter<EnteredIsland>
 ) {
-    for (island_entity, island_id) in entered_query.iter() {
+    for island_entity in entered_query.iter() {
+        println!("ENTERING ISLAND PLAYER");
         commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
-        player_enter_event.write(EnteredIsland(island_id.0));
+        player_enter_event.write(EnteredIsland(island_entity));
         state.set(GameState::Island);
     }
 }
@@ -68,7 +70,7 @@ fn client_island_cleanup(
 
 fn spawn_player_island(
     mut commands: Commands,
-    players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>)>,
+    players: Query<(Entity, &Position, Option<&LocalPlayer>, &OnIsland), (With<Character>, Without<Transform>, Without<Waiting>)>,
     local_island_query: Query<Entity, With<LocalIsland>>,
     assets: Res<AssetServer>,
 ) {
@@ -77,7 +79,7 @@ fn spawn_player_island(
             commands.entity(entity).insert((
                 Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
             ));
-
+            println!("POS: {}", position.0);
             let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
             let visual = commands.spawn((
                 SceneRoot(scene),
@@ -102,7 +104,7 @@ fn visualize_island(
     mut commands: Commands,
     islands: Query<(Entity, &Grid, &Transform), (Without<GenerateIsland>, With<VisualizeIsland>)>,
     assets: Res<AssetServer>,
-){    
+){
     if let Ok((entity, grid, island_position)) = islands.single() {
         let island_visual_root = commands
         .spawn((
@@ -156,11 +158,12 @@ fn visualize_island(
 fn add_waiting_player(
     mut commands: Commands,
     players: Query<(Entity, &OnIsland), With<Waiting>>,
-    mut grid_query: Query<&mut Grid>,
+    mut grid_query: Query<&mut Grid, With<FinishedSetupIsland>>,
     position_query: Query<&Position>
 ) {
     for (player_entity, island) in players.iter() {
         if let Ok(mut map) = grid_query.get_mut(island.0) {
+            println!("SETTING WAITING PLAYER TO: {}", map.leave_position);
             let mut spawn_pos = map.leave_position;
             spawn_pos.y += 2;
             while map.get_tile(spawn_pos).kind != TileType::Empty {
@@ -197,17 +200,16 @@ fn add_waiting_player(
 fn player_enters_island(
     mut commands: Commands,
     mut island_enter_event: EventReader<FromClient<EnteredIsland>>,
-    islands: Query<(Entity, &Island)>,
 ) {
     for FromClient { client_entity, event } in island_enter_event.read() {
-        let island_id = event.0;
+        let island_entity = event.0;
         let player_entity = commands.spawn((
             Character,
             Health::new(200),
             Damage { value: 20 },
             OwnedBy(*client_entity),
             Waiting,
-            OnIsland(island_id),
+            OnIsland(island_entity),
         )).id();
         
         commands.server_trigger_targets(
@@ -218,10 +220,8 @@ fn player_enters_island(
             player_entity,
         );
 
-        for (entity, island) in islands.iter() {
-            if island.0 == island_id {
-                commands.entity(entity).insert(GenerateIsland);
-            }
+        if *client_entity != SERVER {
+            commands.entity(island_entity).insert(GenerateIsland);
         }
         println!("ADDING PLAYER {:?}, WAITING FOR ISLAND", player_entity);
     }
@@ -266,10 +266,12 @@ fn client_player_leaves_island(
     mut leave_island_event: EventReader<LeaveIsland>,
     mut grid_query: Query<&mut Grid, With<LocalIsland>>,
     client: Option<Res<RenetClient>>
-) {   
+) {
     for event in leave_island_event.read() {
         if client.is_some() {
-            grid_query.single_mut().unwrap().reset();
+            if let Ok(mut grid) = grid_query.single_mut() {
+                grid.reset();
+            }
             println!("Deleting island on client");
         }
         state.set(GameState::Overworld);
@@ -293,9 +295,7 @@ fn player_leaves_island(
                 map.entities.remove(&entity);
                 map.player_count -= 1;
 
-                if let Ok(island_id) = island_query.get(island.0) {
-                    leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island_id.0) });    
-                }
+                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland });
             }
         }
     }
@@ -304,7 +304,7 @@ fn player_leaves_island(
 fn clean_up_island( //TODO: terribly inefficient, to loop over all islands, could better check when player leaves if no player is left
     mut commands: Commands,
     players: Query<&OnIsland, Without<Enemy>>,
-    grid_query: Query<(Entity, &Grid)>
+    mut grid_query: Query<(Entity, &mut Grid), With<FinishedSetupIsland>>
 ) {
     let mut grids: HashSet<Entity> = grid_query.iter().map(|(e, _)| e).collect();
     for island in players.iter() {
@@ -312,12 +312,14 @@ fn clean_up_island( //TODO: terribly inefficient, to loop over all islands, coul
     }
 
     for grid_entity in grids.iter() {
-        println!("No players left on island {:?}: cleaning up", grid_entity);      
-
-        for enemy_entity in grid_query.get(*grid_entity).unwrap().1.entities.iter() {
-            commands.entity(*enemy_entity).insert(RemoveEntity);
+        println!("No players left on island {:?}: cleaning up", grid_entity);
+        if let Ok((grid_entity, mut grid)) = grid_query.get_mut(*grid_entity) {
+            for enemy_entity in grid.entities.iter() {
+                commands.entity(*enemy_entity).insert(RemoveEntity);
+            }
+            grid.reset();
         }
         
-        commands.entity(*grid_entity).remove::<MapFinishedIsland>(); //TODO: Improve this logic, MapFinishedIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
+        commands.entity(*grid_entity).remove::<(FinishedSetupIsland)>(); //TODO: Improve this logic, FinishedSetupIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
     }
 }   

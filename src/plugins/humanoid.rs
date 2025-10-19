@@ -37,16 +37,13 @@ impl Plugin for HumanoidPlugin {
 
 fn player_death_check(
     mut commands: Commands,
-    entities: Query<(&Health, Entity, &OwnedBy, &OnIsland), Without<Enemy>>,
-    island_query: Query<&Island>,
+    entities: Query<(&Health, Entity, &OwnedBy), With<Character>>,
     mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
 ) {
-    for (health, entity, owner, island) in entities.iter() {
+    for (health, entity, owner) in entities.iter() {
         if health.get() == 0 {
             commands.entity(entity).insert(RemoveEntity);
-            if let Ok(island_id) = island_query.get(island.0) {
-                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland(island_id.0) });
-            }
+            leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland });
         }
     }
 }
@@ -58,7 +55,11 @@ fn remove_entities(
     mut grid_query: Query<&mut Grid>
 ) {
     for (entity, position, island) in entities.iter() {
-        grid_query.get_mut(island.0).map(|mut grid| {grid.remove_entity(position.0); grid.entities.remove(&entity)});
+        if let Ok(mut grid) = grid_query.get_mut(island.0) {
+            grid.remove_entity(position.0); 
+            grid.entities.remove(&entity);
+        }
+
         println!("Despawning entity: {:?}", entity);
         commands.entity(entity).despawn();
     }

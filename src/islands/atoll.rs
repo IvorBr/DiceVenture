@@ -40,8 +40,8 @@ impl Plugin for AtollPlugin {
         app
         .add_systems(Update, // setup island tiles
         (
-            generate_island_map::<Atoll>.before(setup_island_server), 
-            setup_island_server.run_if(server_running),
+            (generate_island_map::<Atoll>, 
+            setup_island_server.run_if(server_running)).chain(),
             generate_island_overworld::<Atoll>)
         );
     }
@@ -52,6 +52,7 @@ fn setup_island_server(
     mut islands: Query<(Entity, &mut Grid, Option<&CompletedIslandObjective>, &Island), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
     for (entity, mut grid, island_obj, island_id) in islands.iter_mut() {
+        println!("ADDING IN ENEMIES");
         if island_obj.is_none() {
             let mut generator = StdRng::seed_from_u64(island_id.seed);
             

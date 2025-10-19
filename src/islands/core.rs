@@ -40,7 +40,9 @@ pub fn add_boardwalk(
                         Tile::new(TileType::Terrain(TerrainType::Boardwalk), Entity::PLACEHOLDER),
                     );
                     map.leave_position = *pos;
+                    
                 }
+                println!("LEAVE POS: {}", map.leave_position);
                 reserve_with_margin(reserved_positions, &positions, 1);
                 return;
             }

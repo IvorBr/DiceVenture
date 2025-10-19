@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use bevy::render::view::RenderLayers;
-use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland};
+use bevy_replicon::prelude::{server_running, AppRuleExt};
+use bevy_replicon_renet2::renet2::RenetServer;
+use crate::components::core::Initialized;
+use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, OnIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
 use crate::components::ship::Ship;
 use crate::islands::atoll::Atoll;
@@ -41,9 +44,13 @@ pub struct OverworldPlugin;
 impl Plugin for OverworldPlugin {
     fn build(&self, app: &mut App) {
         app
+        .replicate::<Island>()
+        .replicate::<OnIsland>()
+        .replicate::<StarterIsland>()
         .add_plugins((MeshPickingPlugin, MaterialPlugin::<WaterMaterial>::default()))
-        .add_systems(OnEnter(GameState::Overworld), (spawn_overworld, activate_overworld, spawn_overworld_ui))
+        .add_systems(OnEnter(GameState::Overworld), (activate_overworld, spawn_overworld_ui))
         .add_systems(OnExit(GameState::Overworld), overworld_cleanup)
+        .add_systems(Startup, (setup_overworld, generate_islands.run_if(resource_exists::<RenetServer>)).chain())
         .add_systems(
             Update,
             (
@@ -65,7 +72,8 @@ fn spawn_island(
             .insert((
                 Transform::from_translation(island.position),
                 Visibility::Inherited,
-                Atoll
+                Atoll,
+                Initialized
             ))
             .insert(ChildOf(overworld_root));
         }
@@ -154,25 +162,51 @@ fn poisson_disk_sample_2d(
     points[1..].to_vec()
 }
 
-fn spawn_overworld(
+fn generate_islands(
+    mut commands: Commands,
+    overworld_query: Query<Entity, With<OverworldRoot>>,
+    world_seed: Res<WorldSeed>
+){
+    if let Ok(overworld_root) = overworld_query.single() {
+        //starter island
+        commands
+        .spawn((
+            StarterIsland,
+            Island{seed: 0, position: Vec3::ZERO},
+        ))
+        .insert(ChildOf(overworld_root));
+
+        // let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
+        // let positions = poisson_disk_sample_2d(
+        //     Vec2::ZERO,
+        //     5.0 * 8.0,     // min distance between islands
+        //     20,      // number of islands
+        //     30.0 * 8.0,    // spread range
+        //     &mut rng,
+        // );
+
+        // for (i, pos) in positions.into_iter().enumerate() {
+        //     commands
+        //     .spawn((
+        //         Island { seed: (i + 1) as u64, position: Vec3::new(pos.x.round(), 0.0, pos.y.round()) },
+        //     ))
+        //     .insert(ChildOf(overworld_root));
+        // }
+    }
+}
+
+fn setup_overworld(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
-    overworld_query: Query<&OverworldRoot>,
-    world_seed: Res<WorldSeed>,
 ) {
-    println!("spawning {}", world_seed.0);
-    if overworld_query.single().is_ok() {
-        return;
-    }
-
-    let overworld_root = commands
-        .spawn((
-            OverworldRoot,
-            Transform::from_xyz(0.0, 0.0, 0.0),
-            Visibility::Visible,
-        ))
-        .id();
+    println!("SETUP WORLD");
+    commands
+    .spawn((
+        OverworldRoot,
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Visibility::Visible,
+    ));
 
     // ocean
     commands
@@ -185,44 +219,6 @@ fn spawn_overworld(
             Ocean,
             RenderLayers::layer(LAYER_WATER.into()),
         ));
-
-    // starter island
-    commands
-    .spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        StarterIsland,
-        Island(0),
-        Visibility::Inherited,
-        Atoll
-    ))
-    .insert(ChildOf(overworld_root));
-
-    let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
-    let positions = poisson_disk_sample_2d(
-        Vec2::ZERO,
-        5.0 * 8.0,     // min distance between islands
-        20,      // number of islands
-        30.0 * 8.0,    // spread range
-        &mut rng,
-    );
-
-    for (i, pos) in positions.into_iter().enumerate() {
-        let island_type = if rng.random_bool(0.5) {
-            Atoll
-        } else {
-            Atoll
-        };
-        
-        // Spawn the island entity
-        commands
-        .spawn((
-            Transform::from_xyz(pos.x.round(), 0.0, pos.y.round()),
-            Visibility::Inherited, 
-            Island((i + 1) as u64),
-            island_type
-        ))
-        .insert(ChildOf(overworld_root));
-    }
 }
 
 fn move_ocean(
