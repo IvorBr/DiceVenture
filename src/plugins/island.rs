@@ -6,6 +6,7 @@ use crate::components::humanoid::*;
 use crate::components::island::*;
 use crate::components::island_maps::Grid;
 use crate::components::island_maps::TerrainType;
+use crate::components::overworld::Enterable;
 use crate::components::overworld::Entered;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
@@ -40,7 +41,7 @@ impl Plugin for IslandPlugin {
 
 fn entered_island(
     mut commands: Commands,
-    entered_query: Query<Entity, (Added<Entered>, With<Island>)>,
+    entered_query: Query<Entity, (Added<Entered>, With<Enterable>)>,
     mut state: ResMut<NextState<GameState>>,
     mut player_enter_event: EventWriter<EnteredIsland>
 ) {
@@ -76,6 +77,7 @@ fn spawn_player_island(
 ) {
     for (entity, position, local, island) in players.iter() {
         if let Ok(island_entity) = local_island_query.get(island.0) {
+
             commands.entity(entity).insert((
                 Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
             ));
@@ -106,6 +108,7 @@ fn visualize_island(
     assets: Res<AssetServer>,
 ){
     if let Ok((entity, grid, island_position)) = islands.single() {
+        println!("island_position.translation: {}", island_position.translation);
         let island_visual_root = commands
         .spawn((
             IslandRoot,
@@ -320,6 +323,6 @@ fn clean_up_island( //TODO: terribly inefficient, to loop over all islands, coul
             grid.reset();
         }
         
-        commands.entity(*grid_entity).remove::<(FinishedSetupIsland)>(); //TODO: Improve this logic, FinishedSetupIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
+        commands.entity(*grid_entity).remove::<FinishedSetupIsland>(); //TODO: Improve this logic, FinishedSetupIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
     }
 }   

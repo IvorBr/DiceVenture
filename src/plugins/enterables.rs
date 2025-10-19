@@ -1,7 +1,8 @@
 use bevy::prelude::*;
+use bevy_replicon::prelude::AppRuleExt;
 use rand::rngs::StdRng;
 use rand::{random_range, SeedableRng};
-use crate::components::core::Initialized;
+use crate::components::core::{Initialized, Seed};
 use crate::components::island::{EnterPosition, GenerateIsland, IslandGen, MapFinishedIsland};
 use crate::components::character::LocalPlayer;
 use crate::components::island_maps::{Grid, TerrainType, TileType};
@@ -13,6 +14,7 @@ pub struct EnterablesPlugin;
 impl Plugin for EnterablesPlugin {
     fn build(&self, app: &mut App) {
         app
+        .replicate::<Seed>()
         .add_systems(Update, enterable_proximity_check.run_if(in_state(GameState::Overworld)));
     }
 }
@@ -71,14 +73,15 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    new_islands: Query<(Entity, &Island), (Added<Initialized>, With<T>)>,
+    new_islands: Query<(Entity, &Seed), (Added<Initialized>, With<T>)>,
 ) {
     let island_size = 1.0;
-    for (entity, island_id) in new_islands.iter() {
-        let mut generator = StdRng::seed_from_u64(island_id.seed);
+    
+    for (entity, seed) in new_islands.iter() {
+        let mut generator = StdRng::seed_from_u64(seed.0);
 
         let mut map = Grid::new();
-        T::generate_tiles(&mut map, island_id.seed, &mut generator);
+        T::generate_tiles(&mut map, seed.0, &mut generator);
 
         let parent = commands.spawn((OverworldIslandVisual, Transform::from_translation(Vec3::ZERO), Visibility::Visible)).id();
         commands.entity(entity).add_child(parent).insert(EnterPosition(map.leave_position.as_vec3()/island_size));
@@ -146,12 +149,12 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
 
 pub fn generate_island_map<T: Component + IslandGen>(
     mut commands: Commands,
-    mut new_islands: Query<(Entity, &Island, &mut Grid), (With<T>, With<GenerateIsland>)>
+    mut new_islands: Query<(Entity, &Seed, &mut Grid), (With<T>, With<GenerateIsland>)>
 ) {
-    for (entity, island_id, mut grid) in new_islands.iter_mut() {
-        let mut generator = StdRng::seed_from_u64(island_id.seed);
+    for (entity, seed, mut grid) in new_islands.iter_mut() {
+        let mut generator = StdRng::seed_from_u64(seed.0);
 
-        T::generate_tiles(&mut grid, island_id.seed, &mut generator);
+        T::generate_tiles(&mut grid, seed.0, &mut generator);
         commands.entity(entity).insert(MapFinishedIsland).remove::<GenerateIsland>();
     }
 }

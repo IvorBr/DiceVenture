@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::render::view::RenderLayers;
 use bevy_replicon::prelude::{server_running, AppRuleExt};
 use bevy_replicon_renet2::renet2::RenetServer;
-use crate::components::core::Initialized;
+use crate::components::core::{Initialized, Seed};
 use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, OnIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
 use crate::components::ship::Ship;
@@ -172,26 +172,28 @@ fn generate_islands(
         commands
         .spawn((
             StarterIsland,
-            Island{seed: 0, position: Vec3::ZERO},
+            Island{position: Vec3::ZERO},
+            Seed(0)
         ))
         .insert(ChildOf(overworld_root));
 
-        // let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
-        // let positions = poisson_disk_sample_2d(
-        //     Vec2::ZERO,
-        //     5.0 * 8.0,     // min distance between islands
-        //     20,      // number of islands
-        //     30.0 * 8.0,    // spread range
-        //     &mut rng,
-        // );
+        let mut rng = ChaCha8Rng::seed_from_u64(world_seed.0);
+        let positions = poisson_disk_sample_2d(
+            Vec2::ZERO,
+            5.0 * 8.0,     // min distance between islands
+            20,      // number of islands
+            30.0 * 8.0,    // spread range
+            &mut rng,
+        );
 
-        // for (i, pos) in positions.into_iter().enumerate() {
-        //     commands
-        //     .spawn((
-        //         Island { seed: (i + 1) as u64, position: Vec3::new(pos.x.round(), 0.0, pos.y.round()) },
-        //     ))
-        //     .insert(ChildOf(overworld_root));
-        // }
+        for (i, pos) in positions.into_iter().enumerate() {
+            commands
+            .spawn((
+                Island { position: Vec3::new(pos.x.round(), 0.0, pos.y.round()) },
+                Seed((i + 1) as u64)
+            ))
+            .insert(ChildOf(overworld_root));
+        }
     }
 }
 

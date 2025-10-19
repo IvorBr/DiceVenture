@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use noise::Perlin;
 use rand::seq::IndexedRandom;
 
+use crate::components::core::Seed;
 use crate::components::enemy::*;
 use crate::components::humanoid::*;
 use crate::components::island::EliminationObjective;
@@ -49,12 +50,12 @@ impl Plugin for AtollPlugin {
 
 fn setup_island_server(
     mut commands: Commands,
-    mut islands: Query<(Entity, &mut Grid, Option<&CompletedIslandObjective>, &Island), (With<Atoll>, With<MapFinishedIsland>)>,
+    mut islands: Query<(Entity, &mut Grid, Option<&CompletedIslandObjective>, &Seed), (With<Atoll>, With<MapFinishedIsland>)>,
 ) {
-    for (entity, mut grid, island_obj, island_id) in islands.iter_mut() {
+    for (entity, mut grid, island_obj, seed) in islands.iter_mut() {
         println!("ADDING IN ENEMIES");
         if island_obj.is_none() {
-            let mut generator = StdRng::seed_from_u64(island_id.seed);
+            let mut generator = StdRng::seed_from_u64(seed.0);
             
             let top_tiles = grid.above_water_top_tiles();
             for _ in 0..4 {
