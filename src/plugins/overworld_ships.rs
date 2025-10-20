@@ -28,7 +28,7 @@ fn spawn_ships(
     for island in island_query.iter() {
         commands.spawn((
             Ship,
-            Enemy,
+           // Enemy,
             PatrolIsland(island),
             EnterPosition(Vec3::ZERO)
         ));
@@ -58,7 +58,7 @@ fn spawn_overworld_ship(
 //TODO: Have ships move between allegianced islands, or patrol around them
 fn move_enemy_patrol_ship(
     mut commands: Commands,
-    ships: Query<(Entity, &PatrolIsland), (With<Ship>, With<Enemy>)>,
+    ships: Query<(Entity, &PatrolIsland), (With<Ship>)>,
     island_transform_query: Query<&Transform, With<Island>>
 ) {
     for (ship_entity, patrol_island) in ships.iter() {
@@ -75,7 +75,6 @@ fn move_enemy_patrol_ship(
                 ship_entity
             ); 
         }
-        
     }
 }
 

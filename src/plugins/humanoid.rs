@@ -74,7 +74,7 @@ fn position_change_event(
     for PositionUpdate { new_position, entity } in event.read() {
         if let Ok((mut entity_position, island, character)) = entity_query.get_mut(*entity) {
             if let Ok(mut map) = grid_query.get_mut(island.0) {
-                
+                println!("POSITION CHAGNED: {}", new_position);
                 let mut tile_type = TileType::Enemy;
                 if character.is_some() {
                     tile_type = TileType::Player;
@@ -103,6 +103,7 @@ fn position_trigger(
 ) {
     if let Ok((mut position, mut view_direction, island, character)) = entity_query.get_mut(trigger.target()) {
         if let Ok(mut map) = grid_query.get_mut(island.0) {
+            println!("POSITION CHAGNED: {}", trigger.position);
             
             let mut tile_type = TileType::Enemy;
             if character.is_some() {
@@ -129,10 +130,10 @@ fn animate_view_direction(
 }
 
 fn animate_movement(
-    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState)>, 
+    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState, &GlobalTransform)>, 
     time: Res<Time>
 ) {
-    for (position, mut transform, mut action_state) in &mut moved_entities {
+    for (position, mut transform, mut action_state, gtf) in &mut moved_entities {
         let target = position.0.as_vec3();
         let current = transform.translation;
 
@@ -141,7 +142,7 @@ fn animate_movement(
             *action_state = ActionState::Moving;
 
         } else {
-            //println!("TF: {}, POS: {}", transform.translation, target);
+            //println!("GTF: {}, TF: {}, POS: {}", gtf.translation(), transform.translation, target);
             transform.translation = target;
 
             *action_state = ActionState::Idle;

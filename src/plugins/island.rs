@@ -77,10 +77,6 @@ fn spawn_player_island(
 ) {
     for (entity, position, local, island) in players.iter() {
         if let Ok(island_entity) = local_island_query.get(island.0) {
-
-            commands.entity(entity).insert((
-                Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
-            ));
             println!("POS: {}", position.0);
             let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
             let visual = commands.spawn((
@@ -93,7 +89,10 @@ fn spawn_player_island(
             commands.entity(entity)
                 .add_child(visual)
                 .insert(VisualRef(visual))
-                .insert(ChildOf(island_entity));
+                .insert(ChildOf(island_entity))
+                .insert(
+                    Transform::from_translation(position.0.as_vec3()).with_scale(Vec3::new(0.7, 0.7, 0.7)),
+                );
             
             if local.is_some() { 
                 commands.entity(entity).insert(NewCameraTarget);
@@ -108,12 +107,13 @@ fn visualize_island(
     assets: Res<AssetServer>,
 ){
     if let Ok((entity, grid, island_position)) = islands.single() {
-        println!("island_position.translation: {}", island_position.translation);
+        println!("island_position.translation: {}", island_position.translation.round());
         let island_visual_root = commands
         .spawn((
             IslandRoot,
-            Transform::from_translation(island_position.translation.round()),
-            InheritedVisibility::VISIBLE
+            Transform::default(),
+            InheritedVisibility::VISIBLE,
+            ChildOf(entity)
         )).id();
 
         for (pos, chunk) in grid.chunks.iter() {

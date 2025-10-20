@@ -83,14 +83,18 @@ fn spawn_island(
 fn overworld_cleanup(
     mut commands: Commands,
     ui_query: Query<Entity, With<OverworldUI>>,
-    mut overworld_query: Query<&mut Visibility, With<OverworldIslandVisual>>,
+    mut overworld_query: Query<(&ChildOf, &mut Visibility), With<OverworldIslandVisual>>,
+    local_island: Query<Entity, With<LocalIsland>>
 ) {
     if let Ok(ui_entity) = ui_query.single() {
         commands.entity(ui_entity).despawn();
     }
 
-    for mut overworld_visiblity in overworld_query.iter_mut() {
-        *overworld_visiblity = Visibility::Hidden;
+    for (parent, mut overworld_visiblity) in overworld_query.iter_mut() {
+        if local_island.get(parent.0).is_ok() {
+            *overworld_visiblity = Visibility::Hidden;
+        }
+    //    *overworld_visiblity = Visibility::Hidden; //TODO: maybe its cooler to keep these in the map instead of making them dissapear
     }
 }
 

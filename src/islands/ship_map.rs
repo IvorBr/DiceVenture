@@ -82,11 +82,10 @@ fn setup_island_server(
 }
 
 pub fn generate_tiles(map: &mut Grid, seed: u64, generator: &mut StdRng) -> Vec<IVec3> {
-    println!("GENERATING SHIP MAP");
     let size = 2;
     for x in 0..size {
         for z in 0..size {
-            map.add_entity_ivec3(IVec3::new(x, 0, z), Tile::new(TileType::Terrain(TerrainType::Boardwalk), Entity::PLACEHOLDER));
+            map.add_entity_ivec3(IVec3::new(x, 0, z), Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
         }
     }   
 
