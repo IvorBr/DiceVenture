@@ -96,11 +96,12 @@ fn perform_attack(
                         damage: calculate_damage(damage.value, DAMAGE)
                     },
                     Transform::from_translation(pos.0.as_vec3()),
-                    OnIsland(island.0)
+                    OnIsland(island.0),
+                    ChildOf(island.0)
                 ));
             }
 
-            if attack.timer.finished() {
+            if attack.timer.is_finished() {
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;
             }

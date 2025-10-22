@@ -37,7 +37,7 @@ impl Plugin for NetworkPlugin {
         .add_plugins((RepliconPlugins, RepliconRenetPlugins))
         .init_resource::<Cli>()
         .add_client_event::<ClientInfo>(Channel::Ordered)
-        .add_server_event::<MakeLocal>(Channel::Ordered)
+        .add_mapped_server_event::<MakeLocal>(Channel::Ordered)
         .add_server_event::<GameInfo>(Channel::Unordered)
         .make_event_independent::<GameInfo>()
         .add_observer(client_connected)
@@ -48,7 +48,7 @@ impl Plugin for NetworkPlugin {
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
         )
-        .add_systems(Update, client_request_info.run_if(in_state(ClientState::Connected)));
+        .add_systems(OnEnter(ClientState::Connected), client_request_info);
     }
 }
 
@@ -271,9 +271,9 @@ fn client_connected(
 }
 
 fn client_disconnected(
-    trigger: Trigger<OnRemove, ConnectedClient>,
+    trigger: On<Remove, ConnectedClient>,
 ) {
-    info!("{:?} disconnected", trigger.target());
+    info!("{:?} disconnected", trigger.entity);
 }
 
 const PORT: u16 = 5000;

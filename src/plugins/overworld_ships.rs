@@ -1,7 +1,14 @@
 use bevy::prelude::*;
 use bevy_replicon::prelude::{Channel, ClientEventAppExt, FromClient, SendMode, ServerEventAppExt, ServerTriggerExt, ToClients};
 
-use crate::{components::{character::LocalPlayer, core::{Initialized, Seed}, enemy::Enemy, island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland}, overworld::{ClientShipPosition, Entered, Island, LocalIsland, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}}, plugins::camera::NewCameraTarget, GameState, OverworldSet};
+use crate::{
+    components::{
+        character::LocalPlayer, core::Initialized, island::EnterPosition, 
+        overworld::{ClientShipPosition, Island, OverworldPosition, OverworldRoot, ServerShipPosition}, 
+        ship::{PatrolIsland, Ship}
+    }, 
+    plugins::camera::NewCameraTarget, OverworldSet
+};
 
 pub struct OverworldShipPlugin;
 impl Plugin for OverworldShipPlugin {
@@ -14,8 +21,10 @@ impl Plugin for OverworldShipPlugin {
         .add_systems(
             Update,
             (
+                update_ship_position,
+                spawn_overworld_ship,
                 spawn_ships,
-                (spawn_overworld_ship, move_enemy_patrol_ship).in_set(OverworldSet),
+                move_enemy_patrol_ship
             )
         );
     }
@@ -28,7 +37,6 @@ fn spawn_ships(
     for island in island_query.iter() {
         commands.spawn((
             Ship,
-           // Enemy,
             PatrolIsland(island),
             EnterPosition(Vec3::ZERO)
         ));
@@ -58,7 +66,7 @@ fn spawn_overworld_ship(
 //TODO: Have ships move between allegianced islands, or patrol around them
 fn move_enemy_patrol_ship(
     mut commands: Commands,
-    ships: Query<(Entity, &PatrolIsland), (With<Ship>)>,
+    ships: Query<(Entity, &PatrolIsland), Added<Ship>>,
     island_transform_query: Query<&Transform, With<Island>>
 ) {
     for (ship_entity, patrol_island) in ships.iter() {
@@ -78,12 +86,23 @@ fn move_enemy_patrol_ship(
     }
 }
 
+fn update_ship_position(
+    time: Res<Time>,
+    mut ships: Query<(&mut Transform, &mut OverworldPosition), With<Ship>>,
+) {
+    for (mut tf, mut o_pos) in ships.iter_mut() {
+        o_pos.t = (o_pos.t + time.delta_secs() * 20.0).clamp(0.0, 1.0);
+        tf.translation = o_pos.old.lerp(o_pos.new, o_pos.t);
+    }
+}
 fn client_ship_move_update(
     trigger: On<ServerShipPosition>,
-    mut ships: Query<&mut Transform, With<Ship>>,
+    mut ships: Query<&mut OverworldPosition, With<Ship>>,
 ){
-    if let Ok(mut transform) = ships.get_mut(trigger.entity) {
-        transform.translation = trigger.position;
+    if let Ok(mut o_pos) = ships.get_mut(trigger.entity) {
+        o_pos.old = o_pos.new;
+        o_pos.new = trigger.position;
+        o_pos.t = 0.0;
     }
 }
 

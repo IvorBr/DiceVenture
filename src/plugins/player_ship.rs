@@ -25,11 +25,10 @@ fn user_ship_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
-
-    mut ship: Query<(Entity, &mut Transform), (With<Ship>, With<LocalPlayer>)>,
+    mut ship: Query<(Entity, &Transform, &mut OverworldPosition), (With<Ship>, With<LocalPlayer>)>,
     mut commands: Commands
 ) {
-    if let Ok((entity, mut ship_transform)) = ship.single_mut() {
+    if let Ok((entity, ship_transform, mut o_pos)) = ship.single_mut() {
         let mut direction = Vec3::ZERO;
 
         if keyboard_input.pressed(KeyCode::KeyW) {
@@ -57,8 +56,11 @@ fn user_ship_movement(
 
         if direction != Vec3::ZERO {
             let speed = 20.0;
-            ship_transform.translation += direction.normalize() * speed * time.delta_secs();
+            o_pos.old = o_pos.new;
+            o_pos.new = o_pos.old + direction.normalize() * speed * time.delta_secs();
+            o_pos.t = 0.0;
             
+            println!("SENDING EVENT TO SERVER");
             commands.client_trigger(
                 ClientShipPosition{ position: ship_transform.translation, entity } ,
             );
