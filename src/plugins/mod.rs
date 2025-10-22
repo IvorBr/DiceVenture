@@ -16,3 +16,4 @@ pub mod ui;
 pub mod animations;
 pub mod projectiles;
 pub mod enterables;
+pub mod terrain_registry;

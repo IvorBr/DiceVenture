@@ -9,10 +9,10 @@ pub struct EleminationObjective;
 #[derive(Component)]
 pub struct IslandRoot;
 
-#[derive(Debug, Deserialize, Event, Serialize, MapEntities, Clone)]
+#[derive(Debug, Deserialize, Message, Serialize, MapEntities, Clone)]
 pub struct EnteredIsland(#[entities] pub Entity);
 
-#[derive(Debug, Deserialize, Event, Serialize)]
+#[derive(Debug, Deserialize, Message, Serialize)]
 pub struct LeaveIsland;
 
 #[derive(Component)]

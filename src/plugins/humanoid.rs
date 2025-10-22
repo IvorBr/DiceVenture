@@ -15,6 +15,7 @@ use crate::plugins::network::OwnedBy;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
 use crate::IslandSet;
+use bevy_replicon::prelude::ClientId::Server;
 
 pub struct HumanoidPlugin;
 impl Plugin for HumanoidPlugin {
@@ -22,28 +23,28 @@ impl Plugin for HumanoidPlugin {
         app
         .replicate::<RemoveEntity>()
         .replicate::<Health>()
-        .add_event::<PositionUpdate>()
-        .add_server_trigger::<ServerPositionUpdate>(Channel::Ordered)
+        .add_message::<PositionUpdate>()
+        .add_mapped_server_event::<ServerPositionUpdate>(Channel::Ordered)
         .add_observer(position_trigger)
         .add_systems(PreUpdate,
         (
-            ((player_death_check, position_change_event).run_if(server_running),
+            ((player_death_check, position_change_event).run_if(in_state(ServerState::Running)),
             (animate_movement,animate_view_direction).in_set(IslandSet)),
             (sync_status_flags_system, status_flags_to_actionstate_system).chain(),
         ))
-        .add_systems(Update, (remove_entities).run_if(server_running));
+        .add_systems(Update, (remove_entities).run_if(in_state(ServerState::Running)));
     }
 }
 
 fn player_death_check(
     mut commands: Commands,
     entities: Query<(&Health, Entity, &OwnedBy), With<Character>>,
-    mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
+    mut leave_island_event: MessageWriter<ToClients<LeaveIsland>>,
 ) {
     for (health, entity, owner) in entities.iter() {
         if health.get() == 0 {
             commands.entity(entity).insert(RemoveEntity);
-            leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland });
+            leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), message: LeaveIsland });
         }
     }
 }
@@ -74,7 +75,6 @@ fn position_change_event(
     for PositionUpdate { new_position, entity } in event.read() {
         if let Ok((mut entity_position, island, character)) = entity_query.get_mut(*entity) {
             if let Ok(mut map) = grid_query.get_mut(island.0) {
-                println!("POSITION CHAGNED: {}", new_position);
                 let mut tile_type = TileType::Enemy;
                 if character.is_some() {
                     tile_type = TileType::Player;
@@ -84,12 +84,11 @@ fn position_change_event(
                 map.add_entity_ivec3(*new_position, Tile::new(tile_type, *entity));
                 entity_position.0 = *new_position;
 
-                commands.server_trigger_targets(
+                commands.server_trigger(
                     ToClients {
-                        mode: SendMode::BroadcastExcept(SERVER),
-                        event: ServerPositionUpdate { position: *new_position } ,
+                        mode: SendMode::BroadcastExcept(Server),
+                        message: ServerPositionUpdate { position: *new_position, entity: *entity } ,
                     },
-                    *entity,
                 );
             }
         }
@@ -97,13 +96,12 @@ fn position_change_event(
 }
 
 fn position_trigger(
-    trigger: Trigger<ServerPositionUpdate>,
+    trigger: On<ServerPositionUpdate>,
     mut entity_query: Query<(&mut Position, &mut ViewDirection, &OnIsland, Option<&Character>)>,
     mut grid_query: Query<&mut Grid>
 ) {
-    if let Ok((mut position, mut view_direction, island, character)) = entity_query.get_mut(trigger.target()) {
+    if let Ok((mut position, mut view_direction, island, character)) = entity_query.get_mut(trigger.entity) {
         if let Ok(mut map) = grid_query.get_mut(island.0) {
-            println!("POSITION CHAGNED: {}", trigger.position);
             
             let mut tile_type = TileType::Enemy;
             if character.is_some() {
@@ -111,7 +109,7 @@ fn position_trigger(
             }
 
             map.remove_entity(position.0);
-            map.add_entity_ivec3(trigger.position, Tile::new(tile_type, trigger.target()));
+            map.add_entity_ivec3(trigger.position, Tile::new(tile_type, trigger.entity));
             
             view_direction.0 = ((position.0 - trigger.position).as_vec3() * Vec3::new(1.0, 0.0, 1.0)).normalize_or_zero().round().as_ivec3();
 
@@ -130,10 +128,10 @@ fn animate_view_direction(
 }
 
 fn animate_movement(
-    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState, &GlobalTransform)>, 
+    mut moved_entities: Query<(&Position, &mut Transform, &mut ActionState)>, 
     time: Res<Time>
 ) {
-    for (position, mut transform, mut action_state, gtf) in &mut moved_entities {
+    for (position, mut transform, mut action_state) in &mut moved_entities {
         let target = position.0.as_vec3();
         let current = transform.translation;
 
@@ -142,7 +140,7 @@ fn animate_movement(
             *action_state = ActionState::Moving;
 
         } else {
-            //println!("GTF: {}, TF: {}, POS: {}", gtf.translation(), transform.translation, target);
+            //println!("TF: {}, POS: {}", gtf.translation(), transform.translation, target);
             transform.translation = target;
 
             *action_state = ActionState::Idle;

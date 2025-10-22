@@ -40,7 +40,7 @@ impl Plugin for ShipMapPlugin {
         .add_systems(Update, // setup island tiles
         (
             generate_island_map::<Ship>.before(setup_island_server), 
-            setup_island_server.run_if(server_running),
+            setup_island_server.run_if(in_state(ServerState::Running)),
             generate_island_overworld::<Ship>)
         );
     }
@@ -85,7 +85,7 @@ pub fn generate_tiles(map: &mut Grid, seed: u64, generator: &mut StdRng) -> Vec<
     let size = 2;
     for x in 0..size {
         for z in 0..size {
-            map.add_entity_ivec3(IVec3::new(x, 0, z), Tile::new(TileType::Terrain(TerrainType::Sand), Entity::PLACEHOLDER));
+            map.add_entity_ivec3(IVec3::new(x, 0, z), Tile::new(TileType::Terrain(TerrainType::Boardwalk), Entity::PLACEHOLDER));
         }
     }   
 

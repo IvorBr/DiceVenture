@@ -33,13 +33,13 @@ pub struct SpawnNumberEvent {
 }
 
 fn spawn_damage_numbers(
-    num_trigger: Trigger<SpawnNumberEvent>,
+    num_trigger: On<SpawnNumberEvent>,
     mut commands: Commands,
     assets: Res<AssetServer>,
     mut font: ResMut<DamageFont>,
     local_character: Query<Entity, (With<LocalPlayer>, With<Character>)>
 ) {
-    if font.0.is_weak() {
+    if !font.0.is_strong() {
         font.0 = assets.load("fonts/AncientModernTales.ttf");
     }
 
@@ -58,7 +58,7 @@ fn spawn_damage_numbers(
                 ..default()
             },
             TextColor(color),
-            TextLayout::new_with_justify(JustifyText::Center),
+            TextLayout::new_with_justify(Justify::Center),
             Node {
                 position_type: PositionType::Absolute,
                 ..default()

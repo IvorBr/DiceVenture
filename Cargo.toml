@@ -9,9 +9,9 @@ edition = "2021"
 dev = ["bevy/file_watcher", "bevy/dynamic_linking"]
 
 [dependencies]
-bevy = { version = "0.16.1", features = ["serialize"]  }
-bevy_replicon = "0.34.3"
-bevy_replicon_renet2 = { version = "0.10.0", features = ["native_transport"] }
+bevy = { version = "0.17", features = ["serialize"]  }
+bevy_replicon = "0.36.1"
+bevy_replicon_renet = { version = "0.12.0" }
 
 clap = { version = "4.5.24", features = ["derive"] }
 dolly = "0.6.0"

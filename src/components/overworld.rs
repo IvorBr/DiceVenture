@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::entity::MapEntities, prelude::*};
 use bevy_replicon::prelude::Replicated;
 use serde::{Deserialize, Serialize};
 
@@ -39,12 +39,18 @@ pub struct Enterable;
 #[derive(Component)]
 pub struct Entered;
 
-#[derive(Debug, Deserialize, Event, Serialize)]
-pub struct ClientShipPosition(pub Vec3);
+#[derive(Deserialize, Event, Serialize, MapEntities, Clone)]
+pub struct ClientShipPosition{
+    pub position: Vec3,
+    #[entities]
+    pub entity: Entity
+}
 
-#[derive(Debug, Deserialize, Event, Serialize)]
+#[derive(MapEntities, Deserialize, Event, Serialize)]
 pub struct ServerShipPosition{
-    pub position: Vec3
+    pub position: Vec3,
+    #[entities]
+    pub entity: Entity
 }
 
 #[derive(Resource, Clone, Copy)]

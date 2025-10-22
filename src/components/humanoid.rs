@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use bevy::prelude::*;
+use bevy::{ecs::entity::MapEntities, prelude::*};
 use std::{collections::HashMap};
 use crate::plugins::attack::AttackId;
 use bitflags::bitflags;
@@ -36,15 +36,17 @@ pub struct Damage {
     pub value: u64
 }
 
-#[derive(Event, Debug)]
+#[derive(Message, Debug)]
 pub struct PositionUpdate {
     pub new_position: IVec3,
     pub entity: Entity
 }
 
-#[derive(Debug, Default, Deserialize, Event, Serialize)]
+#[derive(MapEntities, Deserialize, Event, Serialize)]
 pub struct ServerPositionUpdate {
-    pub position: IVec3
+    pub position: IVec3,
+    #[entities]
+    pub entity: Entity
 }
 
 #[derive(Component, Serialize, Deserialize, Default)]
@@ -65,7 +67,7 @@ impl Default for ViewDirection {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Event, Serialize)]
+#[derive(Debug, Default, Deserialize, Message, Serialize)]
 pub struct MoveDirection(pub IVec3);
 
 #[derive(Component, Serialize, Deserialize)]

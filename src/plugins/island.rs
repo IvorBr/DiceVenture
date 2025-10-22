@@ -11,6 +11,7 @@ use crate::components::overworld::Entered;
 use crate::components::overworld::{LocalIsland, Island};
 use crate::islands::atoll::AtollPlugin;
 use crate::islands::ship_map::ShipMapPlugin;
+use crate::plugins::terrain_registry::TerrainRegistry;
 use crate::plugins::network::MakeLocal;
 use crate::components::character::LocalPlayer;
 use crate::plugins::camera::NewCameraTarget;
@@ -19,20 +20,21 @@ use crate::plugins::network::OwnedBy;
 use crate::preludes::network_preludes::*;
 use crate::IslandSet;
 use crate::GameState;
+use bevy_replicon::prelude::ClientId::Server;
 
 pub struct IslandPlugin;
 impl Plugin for IslandPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((AtollPlugin, ShipMapPlugin))
-        .add_mapped_client_event::<EnteredIsland>(Channel::Unordered)
-        .add_server_event::<LeaveIsland>(Channel::Unordered)
+        .add_mapped_client_message::<EnteredIsland>(Channel::Unordered)
+        .add_server_message::<LeaveIsland>(Channel::Unordered)
         .replicate::<Character>()
         .replicate::<Waiting>()
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
-        .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(server_running), visualize_island))
+        .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(in_state(ServerState::Running)), visualize_island))
         .add_systems(Update, (
-            (player_enters_island, player_leaves_island, elimination_island_objective).run_if(server_running),
+            (player_enters_island, player_leaves_island, elimination_island_objective).run_if(in_state(ServerState::Running)),
             (spawn_player_island, client_player_leaves_island).in_set(IslandSet),
             entered_island
         ));
@@ -43,7 +45,7 @@ fn entered_island(
     mut commands: Commands,
     entered_query: Query<Entity, (Added<Entered>, With<Enterable>)>,
     mut state: ResMut<NextState<GameState>>,
-    mut player_enter_event: EventWriter<EnteredIsland>
+    mut player_enter_event: MessageWriter<EnteredIsland>
 ) {
     for island_entity in entered_query.iter() {
         println!("ENTERING ISLAND PLAYER");
@@ -60,6 +62,7 @@ fn client_island_cleanup(
 ) {
     //clean up visuals
     if let Ok(island_root) = islandroot_query.single() {
+        println!("IslandRoot: {}", island_root);
         commands.entity(island_root).despawn();
     }
 
@@ -103,11 +106,10 @@ fn spawn_player_island(
 
 fn visualize_island(
     mut commands: Commands,
-    islands: Query<(Entity, &Grid, &Transform), (Without<GenerateIsland>, With<VisualizeIsland>)>,
-    assets: Res<AssetServer>,
+    islands: Query<(Entity, &Grid), (Without<GenerateIsland>, With<VisualizeIsland>)>,
+    registry: Res<TerrainRegistry>,
 ){
-    if let Ok((entity, grid, island_position)) = islands.single() {
-        println!("island_position.translation: {}", island_position.translation.round());
+    if let Ok((entity, grid)) = islands.single() {
         let island_visual_root = commands
         .spawn((
             IslandRoot,
@@ -116,43 +118,24 @@ fn visualize_island(
             ChildOf(entity)
         )).id();
 
+        let mut to_spawn = Vec::new();
+
         for (pos, chunk) in grid.chunks.iter() {
             for (idx, tile) in chunk.tiles.iter().enumerate() {
-                if !matches!(tile.kind, TileType::Terrain(_)) {
-                    continue;
+                if let TileType::Terrain(tt) = tile.kind {
+                    if let Some(info) = registry.get(&tt) {
+                        let position = grid.chunk_to_world_coords(*pos, idx).as_vec3();
+                        to_spawn.push((
+                            SceneRoot(info.scene.clone()),
+                            Transform::from_translation(position),
+                            ChildOf(island_visual_root)
+                        ));
+                    }
                 }
-
-                let position = grid.chunk_to_world_coords(*pos, idx);
-                let mut mesh: Handle<Mesh> = Handle::default();
-                let mut material: Handle<StandardMaterial> = Handle::default();
-
-                match tile.kind {
-                    TileType::Terrain(TerrainType::Sand) => {
-                        mesh = assets.load("blocks/SandBlockTest.glb#Mesh0/Primitive0").clone();
-                        material = assets.load("blocks/SandBlockTest.glb#Material0").clone();
-                    }
-                    TileType::Terrain(TerrainType::Rock) => {
-                        mesh = assets.load("blocks/RockBlock.glb#Mesh0/Primitive0").clone();
-                        material = assets.load("blocks/RockBlock.glb#Material0").clone();
-                    }
-                    TileType::Terrain(TerrainType::Boardwalk) => {
-                        mesh = assets.load("blocks/BoardWalkBlock.glb#Mesh0/Primitive0").clone();
-                        material = assets.load("blocks/BoardWalkBlock.glb#Material0").clone();
-                    }
-                    TileType::Terrain(TerrainType::PalmTree) => {
-                        mesh = assets.load("blocks/PalmTreeTrunkBlock.glb#Mesh0/Primitive0").clone();
-                        material = assets.load("blocks/PalmTreeTrunkBlock.glb#Material0").clone();
-                    }
-                    _ => ()
-                }
-
-                commands.spawn((
-                    Mesh3d(mesh),
-                    MeshMaterial3d(material),
-                    Transform::from_translation(position.as_vec3()),
-                )).insert(ChildOf(island_visual_root));
             }
         }
+
+        commands.spawn_batch(to_spawn);
 
         commands.entity(entity).remove::<VisualizeIsland>();
     }
@@ -166,7 +149,6 @@ fn add_waiting_player(
 ) {
     for (player_entity, island) in players.iter() {
         if let Ok(mut map) = grid_query.get_mut(island.0) {
-            println!("SETTING WAITING PLAYER TO: {}", map.leave_position);
             let mut spawn_pos = map.leave_position;
             spawn_pos.y += 2;
             while map.get_tile(spawn_pos).kind != TileType::Empty {
@@ -175,22 +157,20 @@ fn add_waiting_player(
 
             commands.entity(player_entity).insert(Position::new(spawn_pos)).remove::<Waiting>();
 
-            commands.server_trigger_targets(
+            commands.server_trigger(
                 ToClients {
-                    mode: SendMode::BroadcastExcept(SERVER),
-                    event: ServerPositionUpdate { position: spawn_pos } ,
+                    mode: SendMode::BroadcastExcept(Server),
+                    message: ServerPositionUpdate { position: spawn_pos, entity: player_entity } ,
                 },
-                player_entity,
             );
 
             for entity in map.entities.iter() {
                 if let Ok(position) = position_query.get(*entity) {
-                    commands.server_trigger_targets(
+                    commands.server_trigger(
                         ToClients {
-                            mode: SendMode::BroadcastExcept(SERVER),
-                            event: ServerPositionUpdate { position: position.0 } ,
+                            mode: SendMode::BroadcastExcept(Server),
+                            message: ServerPositionUpdate { position: position.0, entity: *entity} ,
                         },
-                        *entity,
                     );
                 }   
             }
@@ -202,28 +182,27 @@ fn add_waiting_player(
 
 fn player_enters_island(
     mut commands: Commands,
-    mut island_enter_event: EventReader<FromClient<EnteredIsland>>,
+    mut island_enter_event: MessageReader<FromClient<EnteredIsland>>,
 ) {
-    for FromClient { client_entity, event } in island_enter_event.read() {
-        let island_entity = event.0;
+    for FromClient { client_id, message } in island_enter_event.read() {
+        let island_entity = message.0;
         let player_entity = commands.spawn((
             Character,
             Health::new(200),
             Damage { value: 20 },
-            OwnedBy(*client_entity),
+            OwnedBy(*client_id),
             Waiting,
             OnIsland(island_entity),
         )).id();
         
-        commands.server_trigger_targets(
+        commands.server_trigger(
             ToClients {
-                mode: SendMode::Direct(*client_entity),
-                event: MakeLocal,
-            },
-            player_entity,
+                mode: SendMode::Direct(*client_id),
+                message: MakeLocal(player_entity),
+            }
         );
 
-        if *client_entity != SERVER {
+        if *client_id != Server {
             commands.entity(island_entity).insert(GenerateIsland);
         }
         println!("ADDING PLAYER {:?}, WAITING FOR ISLAND", player_entity);
@@ -266,7 +245,7 @@ fn elimination_island_objective(
 
 fn client_player_leaves_island(
     mut state: ResMut<NextState<GameState>>,
-    mut leave_island_event: EventReader<LeaveIsland>,
+    mut leave_island_event: MessageReader<LeaveIsland>,
     mut grid_query: Query<&mut Grid, With<LocalIsland>>,
     client: Option<Res<RenetClient>>
 ) {
@@ -286,7 +265,7 @@ fn player_leaves_island(
     player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Character>>,
     island_query: Query<&Island>,
     mut grid_query: Query<&mut Grid>,
-    mut leave_island_event: EventWriter<ToClients<LeaveIsland>>,
+    mut leave_island_event: MessageWriter<ToClients<LeaveIsland>>,
 ) {
     for (position, entity, owner, island) in &player_query {
         if let Ok(mut map) = grid_query.get_mut(island.0) {
@@ -298,7 +277,7 @@ fn player_leaves_island(
                 map.entities.remove(&entity);
                 map.player_count -= 1;
 
-                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), event: LeaveIsland });
+                leave_island_event.write(ToClients { mode: SendMode::Direct(owner.0), message: LeaveIsland });
             }
         }
     }

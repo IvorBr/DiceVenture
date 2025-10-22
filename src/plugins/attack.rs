@@ -26,16 +26,20 @@ pub fn key_of<T: 'static>() -> AttackId {
     hash.finish()
 }
 
-#[derive(Debug, Deserialize, Event, Serialize)]
+#[derive(MapEntities, Deserialize, Event, Serialize, Clone)]
 pub struct ClientAttack {
-   pub attack_id: AttackId,
-    pub offset: IVec3
+    pub attack_id: AttackId,
+    pub offset: IVec3,
+    #[entities]
+    pub entity: Entity
 }
 
-#[derive(Debug, Deserialize, Event, Serialize)]
+#[derive(MapEntities, Debug, Deserialize, Event, Serialize)]
 pub struct AttackInfo{
     pub attack_id: AttackId,
-    pub offset: IVec3
+    pub offset: IVec3,
+    #[entities]
+    pub entity: Entity
 }
 
 #[derive(Component)]
@@ -79,11 +83,11 @@ impl Plugin for AttackPlugin {
         app
         .insert_resource(AttackRegistry::default())
         .insert_resource(AttackCatalogue::default())
-        .add_client_trigger::<ClientAttack>(Channel::Unordered)
-        .add_server_trigger::<AttackInfo>(Channel::Unordered)
-        .add_server_trigger::<ClientDamageEvent>(Channel::Unordered)
-        .add_mapped_server_trigger::<NegateDamageTrigger>(Channel::Unordered)
-        .add_event::<NegatedDamageEvent>()
+        .add_mapped_client_event::<ClientAttack>(Channel::Unordered)
+        .add_mapped_server_event::<AttackInfo>(Channel::Unordered)
+        .add_mapped_server_event::<ClientDamageEvent>(Channel::Unordered)
+        .add_mapped_server_event::<NegateDamageTrigger>(Channel::Unordered)
+        .add_message::<NegatedDamageEvent>()
         .add_observer(server_apply_attack)
         .add_observer(client_visualize_attack)
         .add_observer(client_damage_trigger)
@@ -108,8 +112,8 @@ pub struct NegateDamageTrigger {
 }
 
 fn damage_negated_trigger(
-    trigger: Trigger<NegateDamageTrigger>,
-    mut process_writer: EventWriter<NegatedDamageEvent>,
+    trigger: On<NegateDamageTrigger>,
+    mut process_writer: MessageWriter<NegatedDamageEvent>,
     active_skills_q: Query<&ActiveSkills>
 ){
     if let Ok(active_skills) = active_skills_q.get(trigger.victim){
@@ -126,36 +130,35 @@ fn damage_negated_trigger(
 }
 
 fn server_apply_attack(
-    client_trigger: Trigger<FromClient<ClientAttack>>,
+    client_trigger: On<FromClient<ClientAttack>>,
     mut commands: Commands,
 ) {
     let msg = client_trigger.event();
-    let attacker = client_trigger.target();
+    let attacker = client_trigger.entity;
 
-    commands.server_trigger_targets(
+    commands.server_trigger(
         ToClients {
-            mode : SendMode::BroadcastExcept(client_trigger.client_entity),
-            event: AttackInfo { attack_id: msg.attack_id, offset: msg.offset },
+            mode : SendMode::BroadcastExcept(client_trigger.client_id),
+            message: AttackInfo { attack_id: msg.attack_id, offset: msg.offset, entity: attacker },
         },
-        attacker,
     );
 }
 
 fn client_visualize_attack(
-    server_trigger: Trigger<AttackInfo>,
+    server_trigger: On<AttackInfo>,
     mut commands: Commands,
     attack_reg: Res<AttackRegistry>,
     mut active_skills_q: Query<&mut ActiveSkills>,
     mut view_direction_q: Query<&mut ViewDirection>
 ) {
-    if let Ok(mut view_direction) = view_direction_q.get_mut(server_trigger.target()) {
+    if let Ok(mut view_direction) = view_direction_q.get_mut(server_trigger.entity) {
         view_direction.0 = -server_trigger.offset;
     }
 
-    if let Ok(mut active_skills) = active_skills_q.get_mut(server_trigger.target()) {
+    if let Ok(mut active_skills) = active_skills_q.get_mut(server_trigger.entity) {
         let child_entity = commands.spawn(
             AttackMarker,
-        ).insert(ChildOf(server_trigger.target()))
+        ).insert(ChildOf(server_trigger.entity))
         .id();
 
         active_skills.0.insert(server_trigger.attack_id, child_entity);
@@ -189,7 +192,7 @@ impl DamageEvent {
     }
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct NegatedDamageEvent {
     pub owner: Entity,
     pub victim: Entity,
@@ -198,28 +201,30 @@ pub struct NegatedDamageEvent {
     pub damage: u64,
 }
 
-#[derive(Event, Serialize, Deserialize)]
+#[derive(MapEntities, Event, Serialize, Deserialize)]
 pub struct ClientDamageEvent {
     amount: u64,
     position: IVec3,
-    remaining_health: u64
+    remaining_health: u64,
+    #[entities]
+    entity: Entity
 }
 
 fn client_damage_trigger(
-    damage_trigger: Trigger<ClientDamageEvent>,
+    damage_trigger: On<ClientDamageEvent>,
     mut commands: Commands,
     enemies: Query<Entity, With<Enemy>>
 ){
-    commands.trigger(SpawnNumberEvent {amount: damage_trigger.amount, position: damage_trigger.position, entity: damage_trigger.target()} );
+    commands.trigger(SpawnNumberEvent {amount: damage_trigger.amount, position: damage_trigger.position, entity: damage_trigger.entity} );
 
-    commands.entity(damage_trigger.target()).insert(DamageVisualizer {
+    commands.entity(damage_trigger.entity).insert(DamageVisualizer {
         timer: Timer::from_seconds(0.1, TimerMode::Once),
         flash_color: Color::WHITE,
         original_color: None,
     });
 
     if damage_trigger.remaining_health == 0 {
-        if let Ok(_enemy_entity) = enemies.get(damage_trigger.target()) {
+        if let Ok(_enemy_entity) = enemies.get(damage_trigger.entity) {
             // TODO: get the type of the enemy and its possible loot, xp and gold
             commands.trigger(RewardEvent {
                 items: None,
@@ -231,7 +236,7 @@ fn client_damage_trigger(
 }
 
 fn damage_trigger(
-    damage_trigger: Trigger<DamageEvent>,
+    damage_trigger: On<DamageEvent>,
     mut health: Query<(&mut Health, Option<&Children>)>,
     negate_query: Query<&NegatingDamage>,
     server: Option<Res<RenetServer>>,
@@ -252,7 +257,7 @@ fn damage_trigger(
                                 negated = true;
                                 commands.server_trigger(ToClients { 
                                     mode: SendMode::Broadcast, 
-                                    event: NegateDamageTrigger {
+                                    message: NegateDamageTrigger {
                                         attack_id: negate_instance.0,
                                         owner: damage_trigger.owner,
                                         victim: victim,
@@ -269,16 +274,16 @@ fn damage_trigger(
                     if !negated {
                         let remaining_health = hp.damage(damage_trigger.damage);
                         println!("doing the damage: {}", remaining_health);
-                        commands.server_trigger_targets(
+                        commands.server_trigger(
                             ToClients {
                                 mode: SendMode::Broadcast,
-                                event: ClientDamageEvent {
+                                message: ClientDamageEvent {
                                     amount: damage_trigger.damage,
                                     position: damage_trigger.offset,
                                     remaining_health,
+                                    entity: victim
                                 },
-                            },
-                            victim,
+                            }
                         );
                     }
                     
@@ -304,7 +309,7 @@ impl AttackEvent {
 }
 
 fn attack_trigger(
-    attack_trigger: Trigger<AttackEvent>,
+    attack_trigger: On<AttackEvent>,
     mut commands: Commands,
     attack_reg: Res<AttackRegistry>,
     attack_cat: Res<AttackCatalogue>,
@@ -313,7 +318,7 @@ fn attack_trigger(
 ) {
     if let Ok(cooldowns) = &mut cooldowns_query.get_mut(attack_trigger.entity) {
         if let Some(timer) = cooldowns.0.get_mut(&attack_trigger.attack_id) {
-            if !timer.finished() { 
+            if !timer.is_finished() { 
                 return; 
             }
         }
@@ -329,12 +334,13 @@ fn attack_trigger(
 
         active_skills.0.insert(attack_trigger.attack_id, child_entity);
 
-        commands.client_trigger_targets(
+        commands.client_trigger(
             ClientAttack {
                 attack_id: attack_trigger.attack_id,
-                offset: attack_trigger.offset
+                offset: attack_trigger.offset,
+                entity: attack_trigger.entity
             },
-            attack_trigger.entity
+            
         );
 
         attack_reg.spawn(attack_trigger.attack_id, &mut commands, child_entity, attack_trigger.offset);
@@ -382,7 +388,7 @@ fn damage_visualizer_system(
                 material.base_color = visualizer.flash_color;
             }
 
-            if visualizer.timer.finished() {
+            if visualizer.timer.is_finished() {
                 if let Some(original) = visualizer.original_color {
                     if let Some(material) = materials.get_mut(material_handle.id()) {
                         material.base_color = original;

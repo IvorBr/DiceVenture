@@ -1,7 +1,8 @@
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
-use bevy_replicon::prelude::{server_running, AppRuleExt};
-use bevy_replicon_renet2::renet2::RenetServer;
+use bevy::shader::ShaderRef;
+use crate::preludes::network_preludes::RenetServer;
+use bevy_replicon::prelude::{AppRuleExt};
 use crate::components::core::{Initialized, Seed};
 use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, OnIsland, VisualizeIsland};
 use crate::components::character::LocalPlayer;
@@ -10,7 +11,7 @@ use crate::islands::atoll::Atoll;
 use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget, LAYER_WATER};
-use bevy::render::render_resource::{AsBindGroup, ShaderRef, ShaderType};
+use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 

@@ -1,3 +1,4 @@
+use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
 
 pub mod components;
@@ -27,6 +28,7 @@ use crate::plugins::damage_numbers::DamageNumbersPlugin;
 use crate::plugins::enterables::EnterablesPlugin;
 use crate::plugins::overworld_ships::OverworldShipPlugin;
 use crate::plugins::player::PlayerPlugin;
+use crate::plugins::terrain_registry::TerrainPlugin;
 use crate::plugins::ui::UIPlugin;
 
 #[derive(States, PartialEq, Eq, Debug, Hash, Clone)]
@@ -37,13 +39,39 @@ enum GameState {
 }
 
 pub const CHUNK_SIZE : i32 = 16;
-pub const POSITION_SIZE : f32 = 1.0;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct IslandSet;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 struct OverworldSet;
+
+pub struct GamePlugins;
+
+impl PluginGroup for GamePlugins {
+    fn build(self) -> PluginGroupBuilder {
+        PluginGroupBuilder::start::<Self>()
+            .add(NetworkPlugin)
+            .add(PlayerPlugin)
+            .add(UIPlugin)
+
+            .add(OverworldPlugin)
+            .add(PlayerShipPlugin)
+            .add(OverworldShipPlugin)
+            .add(EnterablesPlugin)
+
+            .add(TerrainPlugin)
+            .add(IslandPlugin)
+            .add(CharacterPlugin)
+            .add(EnemyPlugin)
+            .add(HumanoidPlugin)
+            .add(AnimationsPlugin)
+
+            .add(CameraPlugin)
+            .add(DamageNumbersPlugin)
+            .add(AttackPlugin)
+    }
+}
 
 pub struct AppPlugin;
 impl Plugin for AppPlugin {
@@ -66,25 +94,8 @@ impl Plugin for AppPlugin {
         .configure_sets(Update, (
             OverworldSet.run_if(in_state(GameState::Overworld)),
         ))
-        .add_plugins((
-            NetworkPlugin,
-            PlayerPlugin,
-            UIPlugin,
-            
-            OverworldPlugin,
-            PlayerShipPlugin,
-            OverworldShipPlugin,
-            EnterablesPlugin,
-
-            IslandPlugin,
-            CharacterPlugin,
-            EnemyPlugin,    
-            HumanoidPlugin,
-            AnimationsPlugin,
-
-            CameraPlugin,
-            DamageNumbersPlugin,
-            AttackPlugin,
-        ));
+        .add_plugins(
+            GamePlugins
+        );
     }
 }

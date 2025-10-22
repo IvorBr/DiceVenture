@@ -73,13 +73,12 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    new_islands: Query<(Entity, &Seed, &Transform), (Added<Initialized>, With<T>)>,
+    new_islands: Query<(Entity, &Seed), (Added<Initialized>, With<T>)>,
 ) {
     let island_size = 1.0;
     
-    for (entity, seed, tf) in new_islands.iter() {
+    for (entity, seed) in new_islands.iter() {
         let mut generator = StdRng::seed_from_u64(seed.0);
-        println!("TRANSOFMR: {}",tf.translation);
         let mut map = Grid::new();
         T::generate_tiles(&mut map, seed.0, &mut generator);
 

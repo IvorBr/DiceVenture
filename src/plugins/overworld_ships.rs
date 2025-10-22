@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_replicon::prelude::{Channel, ClientTriggerAppExt, FromClient, SendMode, ServerTriggerAppExt, ServerTriggerExt, ToClients};
+use bevy_replicon::prelude::{Channel, ClientEventAppExt, FromClient, SendMode, ServerEventAppExt, ServerTriggerExt, ToClients};
 
 use crate::{components::{character::LocalPlayer, core::{Initialized, Seed}, enemy::Enemy, island::{EnterPosition, EnteredIsland, GenerateIsland, VisualizeIsland}, overworld::{ClientShipPosition, Entered, Island, LocalIsland, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}}, plugins::camera::NewCameraTarget, GameState, OverworldSet};
 
@@ -7,8 +7,8 @@ pub struct OverworldShipPlugin;
 impl Plugin for OverworldShipPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_client_trigger::<ClientShipPosition>(Channel::Unreliable)
-        .add_server_trigger::<ServerShipPosition>(Channel::Unreliable)
+        .add_mapped_client_event::<ClientShipPosition>(Channel::Unreliable)
+        .add_mapped_server_event::<ServerShipPosition>(Channel::Unreliable)
         .add_observer(server_ship_move_update)
         .add_observer(client_ship_move_update)
         .add_systems(
@@ -65,38 +65,38 @@ fn move_enemy_patrol_ship(
         if let Ok(island_transform) = island_transform_query.get(patrol_island.0) {
             let new_position = island_transform.translation - 20.0 * Vec3::X;
 
-            commands.server_trigger_targets(
+            commands.server_trigger(
                 ToClients {
                     mode: SendMode::Broadcast,
-                    event: ServerShipPosition {
+                    message: ServerShipPosition {
                         position: new_position,
+                        entity: ship_entity
                     }
                 },
-                ship_entity
             ); 
         }
     }
 }
 
 fn client_ship_move_update(
-    trigger: Trigger<ServerShipPosition>,
+    trigger: On<ServerShipPosition>,
     mut ships: Query<&mut Transform, With<Ship>>,
 ){
-    if let Ok(mut transform) = ships.get_mut(trigger.target()) {
+    if let Ok(mut transform) = ships.get_mut(trigger.entity) {
         transform.translation = trigger.position;
     }
 }
 
 fn server_ship_move_update(
-    trigger: Trigger<FromClient<ClientShipPosition>>,
+    trigger: On<FromClient<ClientShipPosition>>,
     mut commands: Commands
 ) {
-    commands.server_trigger_targets(ToClients {
-            mode: SendMode::BroadcastExcept(trigger.client_entity),
-            event: ServerShipPosition {
-                position: trigger.0,
+    commands.server_trigger(ToClients {
+            mode: SendMode::BroadcastExcept(trigger.client_id),
+            message: ServerShipPosition {
+                position: trigger.position,
+                entity: trigger.entity
             }
         },
-        trigger.target()
     ); 
 }

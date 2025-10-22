@@ -42,7 +42,7 @@ impl Plugin for AtollPlugin {
         .add_systems(Update, // setup island tiles
         (
             (generate_island_map::<Atoll>, 
-            setup_island_server.run_if(server_running)).chain(),
+            setup_island_server.run_if(in_state(ServerState::Running))).chain(),
             generate_island_overworld::<Atoll>)
         );
     }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::CHUNK_SIZE;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Copy, Clone, Hash)]
 pub enum TerrainType {
     Invisible,
     Sand,

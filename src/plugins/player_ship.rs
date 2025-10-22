@@ -59,9 +59,8 @@ fn user_ship_movement(
             let speed = 20.0;
             ship_transform.translation += direction.normalize() * speed * time.delta_secs();
             
-            commands.client_trigger_targets(
-                ClientShipPosition(ship_transform.translation),
-                entity
+            commands.client_trigger(
+                ClientShipPosition{ position: ship_transform.translation, entity } ,
             );
         }
     }

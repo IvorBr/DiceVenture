@@ -26,7 +26,7 @@ impl Plugin for MovementPlugin {
 
 fn standard_mover(
     time: Res<Time>,
-    mut event: EventWriter<PositionUpdate>,
+    mut event: MessageWriter<PositionUpdate>,
     mut enemies: Query<(Entity, &mut MoveTimer, &Position, &OnIsland, &EnemyState, &MoveRule, &ActionState), (With<Enemy>, Without<Character>)>,
     players: Query<&Position, With<Character>>,
     mut grid_query: Query<&mut Grid>

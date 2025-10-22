@@ -23,11 +23,11 @@ pub struct CharacterPlugin;
 impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_client_event::<MoveDirection>(Channel::Ordered)
+        .add_client_message::<MoveDirection>(Channel::Ordered)
         .insert_resource(MovementCooldown {
             timer: Timer::from_seconds(0.2, TimerMode::Once),
         })
-        .add_systems(PreUpdate, (apply_movement).run_if(server_running))
+        .add_systems(PreUpdate, (apply_movement).run_if(in_state(ServerState::Running)))
         .add_systems(Update,
             (movement_input, attack_input, skill_input, resolve_pending_skill_cast.after(skill_input)).in_set(IslandSet)
         );
@@ -35,7 +35,7 @@ impl Plugin for CharacterPlugin {
 }
 
 fn movement_input(
-    mut move_events: EventWriter<MoveDirection>, 
+    mut move_events: MessageWriter<MoveDirection>, 
     input: Res<ButtonInput<KeyCode>>,
     camera: Query<&DollyCamera, With<PlayerCamera>>,
     player: Query<(Entity, &ActionState), (With<LocalPlayer>, With<Character>)>,
@@ -68,7 +68,7 @@ fn movement_input(
     } else if input.just_pressed(KeyCode::KeyA) {
         direction.x -= 1;
         just_pressed = true;
-    } else if cooldown.timer.finished() {
+    } else if cooldown.timer.is_finished() {
         if input.pressed(KeyCode::KeyW) {
             direction.z -= 1;
         } else if input.pressed(KeyCode::KeyS) {
@@ -99,7 +99,7 @@ fn movement_input(
     }
 
     if (just_pressed && cooldown.timer.elapsed_secs() >= 0.05)
-        || (!just_pressed && cooldown.timer.finished())
+        || (!just_pressed && cooldown.timer.is_finished())
     {
         move_events.write(MoveDirection(direction));
         cooldown.timer.reset();
@@ -160,16 +160,16 @@ fn attack_input(
 }
 
 pub fn apply_movement(
-    mut move_events: EventReader<FromClient<MoveDirection>>,
-    mut position_event: EventWriter<PositionUpdate>,
+    mut move_events: MessageReader<FromClient<MoveDirection>>,
+    mut position_event: MessageWriter<PositionUpdate>,
     players: Query<(&OwnedBy, &Position, Entity, &OnIsland), With<Character>>,
     mut grid_query: Query<&mut Grid>
 ) {
-    for FromClient { client_entity, event } in move_events.read() {
+    for FromClient { client_id, message } in move_events.read() {
         for (owner, position, player_entity, island) in players.iter() {
             if let Ok(mut map) = grid_query.get_mut(island.0) {
-                if *client_entity == owner.0 {
-                    let mut new_position = event.0;
+                if *client_id == owner.0 {
+                    let mut new_position = message.0;
                     let current_pos = position.0.clone();
                     new_position += current_pos;
                     

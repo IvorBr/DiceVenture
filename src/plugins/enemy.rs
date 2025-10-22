@@ -22,7 +22,7 @@ impl Plugin for EnemyPlugin {
         .replicate::<SnakePart>()
         .add_systems(PreUpdate,
             ((init_enemy).in_set(IslandSet),
-            (attack_check, enemy_death_check).run_if(server_running))
+            (attack_check, enemy_death_check).run_if(in_state(ServerState::Running)))
         );
     }
 }
@@ -144,12 +144,11 @@ fn attack_check(
             
                 cooldowns.0.insert(*id, Timer::from_seconds(spec.cooldown, TimerMode::Once));
 
-                commands.server_trigger_targets(
+                commands.server_trigger(
                     ToClients {
-                        mode  : SendMode::Broadcast,
-                        event : AttackInfo { attack_id: *id, offset: dir },
+                        mode: SendMode::Broadcast,
+                        message: AttackInfo { attack_id: *id, offset: dir, entity: enemy_entity },
                     },
-                    enemy_entity,
                 );
 
                 break;

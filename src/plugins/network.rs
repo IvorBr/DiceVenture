@@ -1,7 +1,14 @@
+use bevy::ecs::entity::MapEntities;
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode::Continuous, WinitSettings};
-use bevy_replicon_renet2::netcode::ServerSetupConfig;
-use bevy_replicon_renet2::RenetChannelsExt;
+use bevy_replicon_renet::{
+    RenetChannelsExt, RepliconRenetPlugins,
+    netcode::{
+        ClientAuthentication, NetcodeClientTransport, NetcodeServerTransport, ServerAuthentication,
+        ServerConfig,
+    },
+    renet::{ConnectionConfig, RenetClient, RenetServer},
+};
 use serde::Deserialize;
 use serde::Serialize;
 use crate::components::overworld::WorldSeed;
@@ -9,11 +16,11 @@ use crate::components::character::LocalPlayer;
 use crate::components::ship::Ship;
 use crate::preludes::network_preludes::*;
 use crate::GameState;
-
+use bevy_replicon::prelude::ClientId::Server;
 use clap::Parser;
 
-#[derive(Component, Clone, Copy, Serialize, Deserialize)]
-pub struct OwnedBy(pub Entity);
+#[derive(Component, Clone, Copy)]
+pub struct OwnedBy(pub ClientId);
 
 #[derive(Event, Serialize, Deserialize)]
 struct ClientInfo;
@@ -29,10 +36,10 @@ impl Plugin for NetworkPlugin {
         })
         .add_plugins((RepliconPlugins, RepliconRenetPlugins))
         .init_resource::<Cli>()
-        .add_client_trigger::<ClientInfo>(Channel::Ordered)
-        .add_server_trigger::<MakeLocal>(Channel::Ordered)
-        .add_server_trigger::<GameInfo>(Channel::Unordered)
-        .make_trigger_independent::<GameInfo>()
+        .add_client_event::<ClientInfo>(Channel::Ordered)
+        .add_server_event::<MakeLocal>(Channel::Ordered)
+        .add_server_event::<GameInfo>(Channel::Unordered)
+        .make_event_independent::<GameInfo>()
         .add_observer(client_connected)
         .add_observer(client_disconnected)
         .add_observer(make_local)
@@ -41,7 +48,7 @@ impl Plugin for NetworkPlugin {
         .add_systems(Startup,
             read_cli.map(Result::unwrap)
         )
-        .add_systems(Update, client_request_info.run_if(client_just_connected));
+        .add_systems(Update, client_request_info.run_if(in_state(ClientState::Connected)));
     }
 }
 
@@ -104,8 +111,8 @@ impl Plugin for NetworkPlugin {
 //     }
 // }
 
-#[derive(Event, Serialize, Deserialize)]
-pub struct MakeLocal;
+#[derive(MapEntities, Event, Serialize, Deserialize)]
+pub struct MakeLocal(#[entities] pub Entity);
 
 #[derive(Event, Serialize, Deserialize)]
 pub struct GameInfo{
@@ -124,29 +131,32 @@ fn read_cli(
         Cli::SinglePlayer => {
             commands.spawn((
                 Ship,
-                OwnedBy(SERVER),
+                OwnedBy(Server),
                 LocalPlayer
             ));
 
             state.set(GameState::Overworld);
         }
         Cli::Server { port } => {
-            let server = RenetServer::new(ConnectionConfig::from_channels(
-                channels.server_configs(),
-                channels.client_configs(),
-            ));
+            let server_channels_config = channels.server_configs();
+            let client_channels_config = channels.client_configs();
+
+            let server = RenetServer::new(ConnectionConfig {
+                server_channels_config,
+                client_channels_config,
+                ..Default::default()
+            });
 
             let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-            let public_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
-            let socket = UdpSocket::bind(public_addr)?;
-            let server_config = ServerSetupConfig {
+            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port))?;
+            let server_config = ServerConfig {
                 current_time,
                 max_clients: 10,
                 protocol_id: PROTOCOL_ID,
                 authentication: ServerAuthentication::Unsecure,
-                socket_addresses: vec![vec![public_addr]],
+                public_addresses: Default::default(),
             };
-            let transport = NetcodeServerTransport::new(server_config, NativeSocket::new(socket).unwrap())?;
+            let transport = NetcodeServerTransport::new(server_config, socket)?;
 
 
             commands.insert_resource(server);
@@ -162,30 +172,33 @@ fn read_cli(
 
             commands.spawn((
                 Ship,
-                OwnedBy(SERVER),
+                OwnedBy(Server),
                 LocalPlayer
             ));
 
             state.set(GameState::Overworld);
         }
         Cli::Client { port, ip } => {
-            let client = RenetClient::new(
-                ConnectionConfig::from_channels(channels.server_configs(), channels.client_configs()),
-                false,
-            );
+            let server_channels_config = channels.server_configs();
+            let client_channels_config = channels.client_configs();
+
+            let client = RenetClient::new(ConnectionConfig {
+                server_channels_config,
+                client_channels_config,
+                ..Default::default()
+            });
 
             let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
             let client_id = current_time.as_millis() as u64;
             let server_addr = SocketAddr::new(ip, port);
-            let socket = UdpSocket::bind((ip, 0))?;
+            let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
             let authentication = ClientAuthentication::Unsecure {
                 client_id,
                 protocol_id: PROTOCOL_ID,
-                socket_id: 0,
                 server_addr,
                 user_data: None,
             };
-            let transport = NetcodeClientTransport::new(current_time, authentication, NativeSocket::new(socket).unwrap())?;
+            let transport = NetcodeClientTransport::new(current_time, authentication, socket)?;
 
             commands.insert_resource(client);
             commands.insert_resource(transport);
@@ -222,40 +235,38 @@ fn game_info_trigger(
 }
 
 fn make_local(
-    trigger: Trigger<MakeLocal>, 
+    trigger: On<MakeLocal>, 
     mut commands: Commands,
 ) {
-    commands.entity(trigger.target()).insert(LocalPlayer);
+    commands.entity(trigger.0).insert(LocalPlayer);
 }
 
 fn client_connected(
-    trigger: Trigger<FromClient<ClientInfo>>, 
+    trigger: On<FromClient<ClientInfo>>, 
     mut commands: Commands,
     world_seed: Res<WorldSeed>
 ) {
-    info!("{:?} connected", trigger.client_entity);
+    info!("{:?} connected", trigger.client_id);
 
     let boat_entity = commands.spawn((
         Ship,
-        OwnedBy(trigger.target())
+        OwnedBy(trigger.client_id)
     )).id();
-
 
     commands.server_trigger(
         ToClients {
-            mode: SendMode::Direct(trigger.client_entity),
-            event: GameInfo {
+            mode: SendMode::Direct(trigger.client_id),
+            message: GameInfo {
                 seed: world_seed.0
             },
         }
     );
 
-    commands.server_trigger_targets(
+    commands.server_trigger(
         ToClients {
-            mode: SendMode::Direct(trigger.client_entity),
-            event: MakeLocal,
+            mode: SendMode::Direct(trigger.client_id),
+            message: MakeLocal(boat_entity),
         },
-        boat_entity,
     );
 }
 
