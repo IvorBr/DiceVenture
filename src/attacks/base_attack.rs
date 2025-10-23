@@ -78,7 +78,7 @@ fn perform_attack(
                 ));
             }
 
-            if attack.timer.finished() {
+            if attack.timer.is_finished() {
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;
             }

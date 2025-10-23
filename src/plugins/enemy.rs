@@ -128,7 +128,7 @@ fn attack_check(
 
         for id in &attacks.0 {
             if let Some(timer) = cooldowns.0.get_mut(&id) {
-                if !timer.finished() { 
+                if !timer.is_finished() { 
                     continue; 
                 }
             }

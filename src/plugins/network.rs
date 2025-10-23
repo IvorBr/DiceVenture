@@ -226,7 +226,7 @@ fn client_request_info(
 }
 
 fn game_info_trigger(
-    trigger: Trigger<GameInfo>,
+    trigger: On<GameInfo>,
     mut commands: Commands,
     mut state: ResMut<NextState<GameState>>
 ) {

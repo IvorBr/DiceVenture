@@ -167,7 +167,7 @@ pub fn apply_movement(
 ) {
     for FromClient { client_id, message } in move_events.read() {
         for (owner, position, player_entity, island) in players.iter() {
-            if let Ok(mut map) = grid_query.get_mut(island.0) {
+            if let Ok(map) = grid_query.get_mut(island.0) {
                 if *client_id == owner.0 {
                     let mut new_position = message.0;
                     let current_pos = position.0.clone();

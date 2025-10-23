@@ -80,7 +80,7 @@ fn animate_numbers(
 ) {
     for (entity, mut node,mut text_color, mut text_font, mut damage_number) in &mut query {
         damage_number.ttl.tick(time.delta());
-        if damage_number.ttl.finished() {
+        if damage_number.ttl.is_finished() {
             commands.entity(entity).despawn();
         }
 

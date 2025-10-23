@@ -258,7 +258,7 @@ fn update_skill_cooldowns(
     for (child_of, mut text, mut visibility) in &mut overlays {
         if let Ok(slot) = skill_slots.get(child_of.parent()) {
             if let Some(timer) = cooldowns.0.get(&slot.attack_id) {
-                if !timer.finished() {
+                if !timer.is_finished() {
                     let secs = timer.remaining_secs();
                     *text = Text::new(format!("{:.0}", secs));
                     *visibility = Visibility::Visible;

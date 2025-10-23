@@ -56,7 +56,7 @@ fn register_base_attack(
 fn perform_attack(
     time: Res<Time>,
     mut commands: Commands,
-    mut event: EventWriter<PositionUpdate>,
+    mut event: MessageWriter<PositionUpdate>,
     mut attacks: Query<(Entity, &ChildOf, &mut CutThrough)>,
     mut parent_query: Query<(&mut Position, &mut ActionState, &OnIsland, &Damage)>,
     mut grid_query: Query<&mut Grid>
@@ -64,10 +64,10 @@ fn perform_attack(
     for (child_entity, parent, mut attack) in &mut attacks {
         attack.timer.tick(time.delta());
 
-        if let Ok((mut pos, mut state, island, damage)) = parent_query.get_mut(parent.0) {
+        if let Ok((pos, mut state, island, damage)) = parent_query.get_mut(parent.0) {
             *state = ActionState::Attacking;
 
-            if attack.timer.finished() {
+            if attack.timer.is_finished() {
                 let mut check_pos = pos.0 + attack.direction;
                 if let Ok(map) = grid_query.get_mut(island.0) {
                     while map.get_target(check_pos).is_some() {

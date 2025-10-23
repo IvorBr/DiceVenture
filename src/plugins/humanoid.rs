@@ -10,7 +10,6 @@ use crate::components::humanoid::ViewDirection;
 use crate::components::island::LeaveIsland;
 use crate::components::island::OnIsland;
 use crate::components::island_maps::Grid;
-use crate::components::overworld::Island;
 use crate::plugins::network::OwnedBy;
 use crate::preludes::humanoid_preludes::*;
 use crate::preludes::network_preludes::*;
@@ -68,7 +67,7 @@ fn remove_entities(
 
 fn position_change_event(
     mut commands: Commands,
-    mut event: EventReader<PositionUpdate>,
+    mut event: MessageReader<PositionUpdate>,
     mut entity_query: Query<(&mut Position, &OnIsland, Option<&Character>)>,
     mut grid_query: Query<&mut Grid>
 ) {
@@ -161,7 +160,7 @@ pub fn sync_status_flags_system(
         let mut status = Status::empty();
 
         if let Some(mut stunned) = stunned_opt {
-            if stunned.timer.tick(time.delta()).finished() {
+            if stunned.timer.tick(time.delta()).is_finished() {
                 commands.entity(entity).remove::<Stunned>();
             } else {
                 status |= Status::STUNNED;

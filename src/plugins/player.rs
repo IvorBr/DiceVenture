@@ -20,7 +20,7 @@ fn load_player(
 }
 
 fn reward_trigger(
-    trigger: Trigger<RewardEvent>,
+    trigger: On<RewardEvent>,
     mut xp_query: Query<&mut CharacterXp>,
     mut gold_query: Query<&mut Gold>,
     mut inventory_query: Query<&mut Inventory>

@@ -52,7 +52,7 @@ fn register_base_attack(
 }
 
 fn process_counter(
-    mut reader: EventReader<NegatedDamageEvent>,
+    mut reader: MessageReader<NegatedDamageEvent>,
     counter_query: Query<Entity, With<Counter>>,
     mut commands: Commands,
 ) {
@@ -91,7 +91,7 @@ fn perform_attack(
                 ));
             }
             
-            if attack.timer.finished() {
+            if attack.timer.is_finished() {
                 println!("REMOVING");
                 commands.entity(child_entity).despawn();
                 *state = ActionState::Idle;

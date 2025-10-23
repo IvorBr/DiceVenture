@@ -7,7 +7,7 @@ use crate::{
         overworld::{ClientShipPosition, Island, OverworldPosition, OverworldRoot, ServerShipPosition}, 
         ship::{PatrolIsland, Ship}
     }, 
-    plugins::camera::NewCameraTarget, OverworldSet
+    plugins::camera::NewCameraTarget
 };
 
 pub struct OverworldShipPlugin;

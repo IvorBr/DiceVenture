@@ -5,10 +5,9 @@ use crate::components::enemy::*;
 use crate::components::humanoid::*;
 use crate::components::island::*;
 use crate::components::island_maps::Grid;
-use crate::components::island_maps::TerrainType;
 use crate::components::overworld::Enterable;
 use crate::components::overworld::Entered;
-use crate::components::overworld::{LocalIsland, Island};
+use crate::components::overworld::LocalIsland;
 use crate::islands::atoll::AtollPlugin;
 use crate::islands::ship_map::ShipMapPlugin;
 use crate::plugins::terrain_registry::TerrainRegistry;
@@ -249,7 +248,7 @@ fn client_player_leaves_island(
     mut grid_query: Query<&mut Grid, With<LocalIsland>>,
     client: Option<Res<RenetClient>>
 ) {
-    for event in leave_island_event.read() {
+    for _ in leave_island_event.read() {
         if client.is_some() {
             if let Ok(mut grid) = grid_query.single_mut() {
                 grid.reset();
@@ -263,7 +262,6 @@ fn client_player_leaves_island(
 fn player_leaves_island(
     mut commands: Commands,
     player_query: Query<(&Position, Entity, &OwnedBy, &OnIsland), With<Character>>,
-    island_query: Query<&Island>,
     mut grid_query: Query<&mut Grid>,
     mut leave_island_event: MessageWriter<ToClients<LeaveIsland>>,
 ) {
@@ -295,7 +293,7 @@ fn clean_up_island( //TODO: terribly inefficient, to loop over all islands, coul
 
     for grid_entity in grids.iter() {
         println!("No players left on island {:?}: cleaning up", grid_entity);
-        if let Ok((grid_entity, mut grid)) = grid_query.get_mut(*grid_entity) {
+        if let Ok((_, mut grid)) = grid_query.get_mut(*grid_entity) {
             for enemy_entity in grid.entities.iter() {
                 commands.entity(*enemy_entity).insert(RemoveEntity);
             }

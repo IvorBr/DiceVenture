@@ -2,9 +2,9 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::shader::ShaderRef;
 use crate::preludes::network_preludes::RenetServer;
-use bevy_replicon::prelude::{AppRuleExt};
+use bevy_replicon::prelude::AppRuleExt;
 use crate::components::core::{Initialized, Seed};
-use crate::components::island::{EnterPosition, EnteredIsland, GenerateIsland, OnIsland, VisualizeIsland};
+use crate::components::island::OnIsland;
 use crate::components::character::LocalPlayer;
 use crate::components::ship::Ship;
 use crate::islands::atoll::Atoll;
@@ -12,7 +12,7 @@ use crate::GameState;
 use crate::components::overworld::*;
 use crate::plugins::camera::{CameraTarget, NewCameraTarget, LAYER_WATER};
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 #[derive(ShaderType, Clone, Copy, Default)]
