@@ -49,7 +49,7 @@ impl Plugin for OverworldPlugin {
         .replicate::<OnIsland>()
         .replicate::<StarterIsland>()
         .add_plugins((MeshPickingPlugin, MaterialPlugin::<WaterMaterial>::default()))
-        .add_systems(OnEnter(GameState::Overworld), (activate_overworld, spawn_overworld_ui))
+        .add_systems(OnEnter(GameState::Overworld), activate_overworld)
         .add_systems(OnExit(GameState::Overworld), overworld_cleanup)
         .add_systems(Startup, (setup_overworld, generate_islands.run_if(resource_exists::<RenetServer>)).chain())
         .add_systems(
@@ -97,31 +97,6 @@ fn overworld_cleanup(
         }
     //    *overworld_visiblity = Visibility::Hidden; //TODO: maybe its cooler to keep these in the map instead of making them dissapear
     }
-}
-
-fn spawn_overworld_ui(
-    mut commands: Commands
-) {
-    commands.spawn(
-        (Node {
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        justify_content: JustifyContent::SpaceBetween,
-        ..default()
-    }, 
-    OverworldUI
-    ))
-    .with_children(|parent| {
-        parent.spawn((
-            Text::new("Enter island - press F"),
-            TextFont {
-                font_size: 25.0,
-                ..default()
-            },
-            ProximityUI,
-            Visibility::Hidden
-        ));
-    });
 }
 
 fn activate_overworld(

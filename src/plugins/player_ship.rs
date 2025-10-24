@@ -60,7 +60,6 @@ fn user_ship_movement(
             o_pos.new = o_pos.old + direction.normalize() * speed * time.delta_secs();
             o_pos.t = 0.0;
             
-            println!("SENDING EVENT TO SERVER");
             commands.client_trigger(
                 ClientShipPosition{ position: ship_transform.translation, entity } ,
             );

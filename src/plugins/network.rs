@@ -162,14 +162,6 @@ fn read_cli(
             commands.insert_resource(server);
             commands.insert_resource(transport);
 
-            commands.spawn((Text::new("Server"),
-                TextFont {
-                    font_size: 30.0,
-                    ..default()
-                },
-                TextColor(Color::WHITE)
-            ));
-
             commands.spawn((
                 Ship,
                 OwnedBy(Server),
@@ -202,15 +194,6 @@ fn read_cli(
 
             commands.insert_resource(client);
             commands.insert_resource(transport);
-
-            commands.spawn((
-                Text(format!("Client: {client_id}")),
-                TextFont {
-                    font_size: 30.0,
-                    ..default()
-                },
-                TextColor::WHITE,
-            ));
 
             state.set(GameState::Initializing);
         }

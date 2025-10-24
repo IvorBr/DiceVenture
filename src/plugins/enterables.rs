@@ -15,8 +15,34 @@ impl Plugin for EnterablesPlugin {
     fn build(&self, app: &mut App) {
         app
         .replicate::<Seed>()
+        .add_systems(OnEnter(GameState::Overworld), spawn_proximity_ui)
         .add_systems(Update, enterable_proximity_check.run_if(in_state(GameState::Overworld)));
     }
+}
+
+fn spawn_proximity_ui(
+    mut commands: Commands
+) {
+    commands.spawn(
+        (Node {
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        justify_content: JustifyContent::SpaceBetween,
+        ..default()
+    }, 
+    OverworldUI
+    ))
+    .with_children(|parent| {
+        parent.spawn((
+            Text::new(""),
+            TextFont {
+                font_size: 25.0,
+                ..default()
+            },
+            ProximityUI,
+            Visibility::Inherited
+        ));
+    });
 }
 
 fn find_closest_entity(
@@ -43,7 +69,7 @@ fn find_closest_entity(
 
 fn enterable_proximity_check(
     mut commands: Commands,
-    mut proximity_ui_query: Query<&mut Visibility, With<ProximityUI>>,
+    mut proximity_ui_query: Query< &mut Text, With<ProximityUI>>,
     ship_query: Query<(Entity, &Transform), (With<Ship>, With<LocalPlayer>)>,
     entity_query: Query<(&EnterPosition, &Transform, Entity), With<Enterable>>, //TODO: CURRENTLY DOES ALL ENTERABLES!! SHOULD JUST BE THE CURRENT CHUNK or some defined subset
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -52,15 +78,17 @@ fn enterable_proximity_check(
         let entity_transforms: Vec<(Vec3, Entity)> = entity_query.iter().filter(|(_, _, en)| *en != ship_entity).map(|(ep, tf, en)| (ep.0 + tf.translation, en)).collect();
         
         if let Some((closest_distance, enterable_entity)) = find_closest_entity(*ship_transform, entity_transforms) {
-            if let Ok(mut proximity_ui_visibility) = proximity_ui_query.single_mut() {
+            if let Ok(mut text) = proximity_ui_query.single_mut() {
                 if closest_distance < 4.0 {
-                    *proximity_ui_visibility = Visibility::Inherited;
-
+                    text.0 = "Enter island - press F".to_string();
                     if keyboard_input.pressed(KeyCode::KeyF) {
                         commands.entity(enterable_entity).insert(Entered);
                     }
                 } else {
-                    *proximity_ui_visibility = Visibility::Hidden;
+                    text.0 = "Enter own ship - press F".to_string();
+                    if keyboard_input.pressed(KeyCode::KeyF) {
+                        commands.entity(ship_entity).insert(Entered);
+                    }
                 }
             }
 

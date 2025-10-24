@@ -58,26 +58,26 @@ fn setup_island_server(
             let mut generator = StdRng::seed_from_u64(seed.0);
             
             let top_tiles = grid.above_water_top_tiles();
-            // for _ in 0..4 {
-            //     let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
-            //     let enemy_id = commands
-            //         .spawn((
-            //             Enemy,
-            //             STANDARD_MOVE,
-            //             Attacks(vec![key_of::<BaseAttack>()]),
-            //             AttackCooldowns::default(),
-            //             EnemyState::Idle,
-            //             Position::new(enemy_pos),
-            //             MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
-            //             OnIsland(entity),
-            //             RangeAggro(8),
-            //             Damage { value: 10 }
-            //         ))
-            //         .id();
+            for _ in 0..4 {
+                let enemy_pos = top_tiles.choose(&mut generator).unwrap().clone() + IVec3::Y;
+                let enemy_id = commands
+                    .spawn((
+                        Enemy,
+                        STANDARD_MOVE,
+                        Attacks(vec![key_of::<BaseAttack>()]),
+                        AttackCooldowns::default(),
+                        EnemyState::Idle,
+                        Position::new(enemy_pos),
+                        MoveTimer(Timer::from_seconds(0.7, TimerMode::Repeating), false),
+                        OnIsland(entity),
+                        RangeAggro(8),
+                        Damage { value: 10 }
+                    ))
+                    .id();
 
-            //     grid.add_enemy(enemy_pos, enemy_id);
-            //     commands.entity(entity).insert(EliminationObjective);
-            // }
+                grid.add_enemy(enemy_pos, enemy_id);
+                commands.entity(entity).insert(EliminationObjective);
+            }
         }
 
         commands.entity(entity).insert(FinishedSetupIsland).remove::<MapFinishedIsland>();

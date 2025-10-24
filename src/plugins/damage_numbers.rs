@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::{components::character::{Character, LocalPlayer}, plugins::camera::PlayerCamera};
-
+use crate::{components::{character::{Character, LocalPlayer}, island::OnIsland}, plugins::camera::PlayerCamera};
+use crate::components::overworld::Island;
 pub struct DamageNumbersPlugin;
 impl Plugin for DamageNumbersPlugin {
     fn build(&self, app: &mut App) {
@@ -37,19 +37,22 @@ fn spawn_damage_numbers(
     mut commands: Commands,
     assets: Res<AssetServer>,
     mut font: ResMut<DamageFont>,
-    local_character: Query<Entity, (With<LocalPlayer>, With<Character>)>
+    local_character: Query<(Entity, &OnIsland), (With<LocalPlayer>, With<Character>)>,
+    island_q: Query<&Transform, With<Island>>
 ) {
     if !font.0.is_strong() {
         font.0 = assets.load("fonts/AncientModernTales.ttf");
     }
 
-    if let Ok(character_entity) = local_character.single() {
+    if let Ok((character_entity, island)) = local_character.single() {
+        let island_tf = island_q.get(island.0).unwrap();
         let color = if character_entity == num_trigger.entity {
             Color::LinearRgba(LinearRgba { red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0 })
         } else {
             Color::LinearRgba(LinearRgba { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
         };
-
+        let position = island_tf.translation + num_trigger.position.as_vec3();
+        println!("ADDING A DMG NUMBER, pos: {}", position);
         commands.spawn((
             Text::new(num_trigger.amount.to_string()),
             TextFont {
@@ -66,8 +69,8 @@ fn spawn_damage_numbers(
             DamageNumber {
                 ttl: Timer::from_seconds(0.8, TimerMode::Once),
                 rise_speed: 1.5,
-                pos: Vec3::new(num_trigger.position.x as f32, (num_trigger.position.y + 1) as f32, num_trigger.position.z as f32)
-            },
+                pos: position
+            }
         ));
     }
 }
@@ -92,7 +95,6 @@ fn animate_numbers(
                 node.left = Val::Px(screen_pos.x);
                 node.top = Val::Px(screen_pos.y);
 
-
                 let remaining = damage_number.ttl.remaining_secs().max(0.0);
                 let delta = remaining / damage_number.ttl.duration().as_secs_f32();
                 
@@ -103,50 +105,3 @@ fn animate_numbers(
         }
     }
 }
-
-// fn spawn_damage_numbers(
-//     num_trigger: Trigger<SpawnNumberEvent>,
-//     mut commands: Commands,
-//     mut materials: ResMut<Assets<StandardMaterial>>,
-// ) {
-//     commands.spawn((
-//         Text3d::new(num_trigger.amount.to_string()),
-//         Text3dStyling {
-//             size: 1.0,
-//             color: Color::WHITE.into(),
-//             //font: "Ancient Modern Tales".into(),
-//             ..Default::default()
-//         },
-//         Mesh3d::default(),
-//         MeshMaterial3d(materials.add(
-//         StandardMaterial {
-//             base_color_texture: Some(TextAtlas::DEFAULT_IMAGE.clone()),
-//             alpha_mode: AlphaMode::Blend,
-//             ..Default::default()
-//         })),
-//         Transform::from_translation(Vec3::new(num_trigger.position.x as f32, (num_trigger.position.y + 5) as f32, num_trigger.position.z as f32)),
-//         DamageNumber {
-//             ttl: Timer::from_seconds(0.8, TimerMode::Once),
-//             rise_speed: 1.5,
-//         },
-//     ));
-// }
-
-// fn animate_numbers(
-//     mut commands: Commands,
-//     time: Res<Time>,
-//     mut query: Query<(Entity, &mut Transform, &mut Text3dStyling, &mut DamageNumber)>,
-// ) {
-//     for (entity, mut transform, mut text_styling, mut damage_number) in &mut query {
-//         damage_number.ttl.tick(time.delta());
-//         transform.translation.y += damage_number.rise_speed * time.delta_secs();
-
-//         let remaining = damage_number.ttl.remaining_secs().max(0.0);
-//         let alpha = remaining / damage_number.ttl.duration().as_secs_f32();
-//         text_styling.color.alpha = alpha;
-
-//         if damage_number.ttl.finished() {
-//             commands.entity(entity).despawn();
-//         }
-//     }
-// }
