@@ -52,7 +52,6 @@ fn spawn_damage_numbers(
             Color::LinearRgba(LinearRgba { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
         };
         let position = island_tf.translation + num_trigger.position.as_vec3();
-        println!("ADDING A DMG NUMBER, pos: {}", position);
         commands.spawn((
             Text::new(num_trigger.amount.to_string()),
             TextFont {

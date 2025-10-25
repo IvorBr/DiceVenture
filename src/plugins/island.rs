@@ -33,7 +33,7 @@ impl Plugin for IslandPlugin {
         .add_systems(OnExit(GameState::Island), client_island_cleanup)
         .add_systems(PreUpdate, ((clean_up_island, add_waiting_player).run_if(in_state(ServerState::Running)), visualize_island))
         .add_systems(Update, (
-            (player_enters_island, player_leaves_island, elimination_island_objective).run_if(in_state(ServerState::Running)),
+            (player_enters_island, player_leaves_island, elimination_island_objective, chest_death_check).run_if(in_state(ServerState::Running)),
             (spawn_player_island, client_player_leaves_island).in_set(IslandSet),
             entered_island
         ));
@@ -303,3 +303,15 @@ fn clean_up_island( //TODO: terribly inefficient, to loop over all islands, coul
         commands.entity(*grid_entity).remove::<FinishedSetupIsland>(); //TODO: Improve this logic, FinishedSetupIsland indicates that the map was finished loading, so we remove it so it can be loaded again...
     }
 }   
+
+fn chest_death_check(
+    mut commands: Commands,
+    entities: Query<(&Health, Entity), With<Chest>>,
+) {
+    for (health, entity) in entities.iter() {
+        if health.get() == 0 {
+            commands.entity(entity).insert(RemoveEntity);
+            //reward players
+        }
+    }
+}

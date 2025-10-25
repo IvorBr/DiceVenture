@@ -58,7 +58,5 @@ pub struct WorldSeed(pub u64);
 
 #[derive(Default, Component)]
 pub struct OverworldPosition{
-    pub new: Vec3,
-    pub old: Vec3,
-    pub t: f32,
+    pub target: Vec3,
 }

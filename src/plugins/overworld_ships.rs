@@ -88,21 +88,29 @@ fn move_enemy_patrol_ship(
 
 fn update_ship_position(
     time: Res<Time>,
-    mut ships: Query<(&mut Transform, &mut OverworldPosition), With<Ship>>,
-) {
-    for (mut tf, mut o_pos) in ships.iter_mut() {
-        o_pos.t = (o_pos.t + time.delta_secs() * 20.0).clamp(0.0, 1.0);
-        tf.translation = o_pos.old.lerp(o_pos.new, o_pos.t);
+    mut ships: Query<(&mut Transform, &OverworldPosition), With<Ship>>,
+) {  
+    let dt = time.delta_secs();
+
+    for (mut tf, o_pos) in ships.iter_mut() {
+        let to_target = o_pos.target - tf.translation;
+        let dist = to_target.length();
+        if dist < 0.001 { continue; }
+
+        // Exponential catch-up factor: 1 - e^(-k * dt)
+        let catchup = 1.0 - (-10.0 * dt).exp();
+        let step = to_target * catchup;
+
+        tf.translation += step;
     }
 }
+
 fn client_ship_move_update(
     trigger: On<ServerShipPosition>,
     mut ships: Query<&mut OverworldPosition, With<Ship>>,
-){
+) {
     if let Ok(mut o_pos) = ships.get_mut(trigger.entity) {
-        o_pos.old = o_pos.new;
-        o_pos.new = trigger.position;
-        o_pos.t = 0.0;
+        o_pos.target = trigger.position;
     }
 }
 
