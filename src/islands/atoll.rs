@@ -154,7 +154,7 @@ pub fn generate_tiles(map: &mut Grid, seed: u64, generator: &mut StdRng) -> Vec<
             }
             
             for pos in tree_positions.iter() {
-                let terrain = if pos.y != base_pos.y + (height)/2 - 1 {
+                let terrain = if pos.y != base_pos.y {
                     TerrainType::Invisible
                 } else {
                     TerrainType::PalmTree

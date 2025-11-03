@@ -28,7 +28,7 @@ pub fn check_attack_path(
             TileType::Empty => {
                 let new_tile = map.get_tile(tile_pos + IVec3::new(0,-1,0));
 
-                if new_tile.kind == TileType::Empty {
+                if new_tile.kind == TileType::Empty || new_tile.kind == TileType::Enemy {
                     if total_down == i as i32 - 1 {
                         total_down += 1;
                         if total_down >= range as i32/4 {

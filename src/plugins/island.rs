@@ -47,7 +47,6 @@ fn entered_island(
     mut player_enter_event: MessageWriter<EnteredIsland>
 ) {
     for island_entity in entered_query.iter() {
-        println!("ENTERING ISLAND PLAYER");
         commands.entity(island_entity).insert((LocalIsland, GenerateIsland, VisualizeIsland)).remove::<Entered>();
         player_enter_event.write(EnteredIsland(island_entity));
         state.set(GameState::Island);
@@ -80,7 +79,7 @@ fn spawn_player_island(
     for (entity, position, local, island) in players.iter() {
         if let Ok(island_entity) = local_island_query.get(island.0) {
             println!("POS: {}", position.0);
-            let scene: Handle<Scene> = assets.load("characters/BaseCharacter.glb#Scene0");
+            let scene: Handle<Scene> = assets.load("characters/NewBody.glb#Scene0");
             let visual = commands.spawn((
                 SceneRoot(scene),
                 VisualEntity,

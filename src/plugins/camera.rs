@@ -123,7 +123,7 @@ pub fn zoom_in_camera(
     query: Query<Entity, With<DollyCamera>>, 
 ) {
     for entity in query.iter() {
-        commands.entity(entity).insert(ZoomCamera(18.0));
+        commands.entity(entity).insert(ZoomCamera(16.0));
         //set camera state to zoomed in
     }
 }
