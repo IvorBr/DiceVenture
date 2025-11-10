@@ -3,9 +3,7 @@ use bevy_replicon::prelude::{Channel, ClientEventAppExt, FromClient, SendMode, S
 
 use crate::{
     components::{
-        character::LocalPlayer, core::Initialized, island::EnterPosition, 
-        overworld::{ClientShipPosition, Island, OverworldPosition, OverworldRoot, ServerShipPosition}, 
-        ship::{PatrolIsland, Ship}
+        character::LocalPlayer, core::Initialized, humanoid::VisualEntity, island::EnterPosition, overworld::{ClientShipPosition, Island, OverworldPosition, OverworldRoot, ServerShipPosition}, ship::{PatrolIsland, Ship}
     }, 
     plugins::camera::NewCameraTarget
 };
@@ -33,8 +31,11 @@ impl Plugin for OverworldShipPlugin {
 fn spawn_ships(
     mut commands: Commands,
     island_query: Query<Entity, Added<Island>>,
+    assets: Res<AssetServer>
 ){
     for island in island_query.iter() {
+        //let scene: Handle<Scene> = assets.load("Boat.glb#Scene0");
+        
         commands.spawn((
             Ship,
             PatrolIsland(island),
@@ -47,15 +48,24 @@ fn spawn_overworld_ship(
     mut commands: Commands,
     mut ships: Query<(Entity, Option<&LocalPlayer>), (With<Ship>, Without<Transform>)>,
     world_root_query: Query<Entity, With<OverworldRoot>>,
+    assets: Res<AssetServer>
 ) {
     if let Ok(overworld_root) = world_root_query.single() {
         for (entity, local) in ships.iter_mut() {
-            commands.entity(entity).insert((
+            let scene: Handle<Scene> = assets.load("Boat.glb#Scene0");  //TODO: add this scene to a visual entity
+
+            let id = commands.entity(entity).insert((
                 Initialized,
                 Transform::from_xyz(0.0, 0.0, 0.0),
-                Visibility::Inherited
-            )).insert(ChildOf(overworld_root));
-    
+                Visibility::Inherited,
+                ChildOf(overworld_root)
+            )).id();
+            
+            commands.spawn((
+                SceneRoot(scene),
+                ChildOf(id)
+            ));
+
             if local.is_some() { 
                 commands.entity(entity).insert(NewCameraTarget);
             }

@@ -4,10 +4,7 @@ use crate::components::island_maps::TerrainType;
 
 #[derive(Clone)]
 pub struct TerrainInfo {
-    pub scene: Handle<Scene>,
-    pub breakable: bool,
-    /// Optional authored offset (pivot fix, Y lift, scale, etc.)
-    pub offset: Transform,
+    pub scene: Handle<Scene>
 }
 
 #[derive(Resource)]
@@ -26,41 +23,30 @@ impl FromWorld for TerrainRegistry {
         let assets = world.resource::<AssetServer>();
         let mut map = HashMap::default();
 
-        let mut insert = |tt: TerrainType, scene_path: &'static str, breakable: bool, offset: Transform| {
+        let mut insert = |tt: TerrainType, scene_path: &'static str| {
             map.insert(
                 tt,
                 TerrainInfo {
                     scene: assets.load(scene_path),
-                    breakable,
-                    offset,
                 },
             );
         };
 
         insert(
             TerrainType::Sand,
-            "blocks/SandBlockTest.glb#Scene0",
-            true,
-            Transform::IDENTITY,
+            "blocks/SandBlock.glb#Scene0",
         );
         insert(
             TerrainType::Rock,
             "blocks/RockBlock.glb#Scene0",
-            false,
-            Transform::IDENTITY,
         );
         insert(
             TerrainType::Boardwalk,
             "blocks/BoardWalkBlock.glb#Scene0",
-            true,
-            Transform::IDENTITY,
         );
         insert(
             TerrainType::PalmTree,
             "blocks/PalmTreeTrunkBlock.glb#Scene0",
-            true,
-            // Example: nudge up if pivot is at base and your tile origin is center
-            Transform::from_translation(Vec3::Y * 0.0),
         );
 
         TerrainRegistry(map)

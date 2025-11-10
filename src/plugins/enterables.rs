@@ -101,7 +101,7 @@ pub fn generate_island_overworld<T: Component + IslandGen>(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    new_islands: Query<(Entity, &Seed), (Added<Initialized>, With<T>)>,
+    new_islands: Query<(Entity, &Seed), (Added<Initialized>, With<T>, With<Island>)>,
 ) {
     let island_size = 1.0;
     

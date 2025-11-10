@@ -114,11 +114,11 @@ fn attack_input(
     mut view_direction_q: Query<&mut ViewDirection>
 ) {
     let mut direction = IVec3::ZERO;
-    let Ok((entity, action_state, skill_cast_opt)) = player.single() else {
+    let Ok((entity, action_state, casting_skill)) = player.single() else {
         return;
     };
     
-    if *action_state != ActionState::Idle || skill_cast_opt.is_some() {
+    if casting_skill.is_some() {
         return;
     }
 
